@@ -1,251 +1,384 @@
-/* =================================================
-   THE GRINDERS – LUXURY CAFE UNIFIED THEME
-   Login | Employee | Admin
-   ================================================= */
+/* =========================================================
+   THE GRINDERS — LUXURY CAFE (ONE SHARED CSS)
+   Applies to: login.html, employee.html, admin.html
+   Visual only. No JS assumptions.
+   ========================================================= */
 
-/* ---------- ROOT COLORS ---------- */
-:root {
-  --bg-main: #14110e;
-  --bg-soft: #1f1a15;
-  --bg-glass: rgba(30, 24, 18, 0.9);
+:root{
+  --bg0:#070606;
+  --bg1:#0c0a08;
 
-  --gold: #c9a24d;
-  --gold-soft: #e6d3a3;
+  --card: rgba(20,14,10,.86);
+  --card2: rgba(26,18,12,.76);
 
-  --text-main: #f5f2eb;
-  --text-muted: #b9b2a7;
+  --stroke: rgba(255,255,255,.10);
+  --stroke2: rgba(214,176,122,.26);
 
-  --border-soft: rgba(255,255,255,0.08);
+  --text:#f4f1ec;
+  --muted: rgba(244,241,236,.70);
 
-  --green: #3fbf7f;
-  --red: #d95c5c;
+  --gold:#d6b07a;
+  --gold2:#b88a4b;
+
+  --ok:#3fbf7f;
+  --err:#d95c5c;
+
+  --shadow: 0 18px 60px rgba(0,0,0,.55);
+  --radius: 18px;
 }
 
-/* ---------- GLOBAL ---------- */
-* {
-  box-sizing: border-box;
-}
+*{ box-sizing:border-box; }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: "Poppins", "Segoe UI", sans-serif;
-  color: var(--text-main);
+html, body{ height:100%; }
+
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  color: var(--text);
   background:
-    radial-gradient(circle at top, #2a231c, var(--bg-main));
+    radial-gradient(900px 500px at 15% 10%, rgba(214,176,122,.18), transparent 60%),
+    radial-gradient(900px 600px at 85% 0%, rgba(214,176,122,.10), transparent 55%),
+    radial-gradient(1200px 700px at 50% 110%, rgba(120,80,40,.14), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
 }
 
-/* ---------- HEADINGS ---------- */
-h1, h2, h3 {
+/* Links (just in case) */
+a{ color: var(--gold); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+
+/* Shared container */
+.wrap{
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 22px 14px 34px;
+}
+
+/* Shared card look */
+.card, .tile, .actionCard{
+  background: linear-gradient(180deg, var(--card), var(--card2));
+  border: 1px solid var(--stroke2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before, .tile::before, .actionCard::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  background:
+    radial-gradient(520px 140px at 20% 0%, rgba(214,176,122,.18), transparent 60%),
+    radial-gradient(420px 140px at 80% 0%, rgba(214,176,122,.10), transparent 60%);
+  pointer-events:none;
+  opacity:.85;
+}
+
+.card > *, .tile > *, .actionCard > *{ position: relative; }
+
+.card{ padding: 18px 18px 16px; }
+.tile{ padding: 16px; }
+.actionCard{ padding: 18px; }
+
+h1, h2, h3{
+  margin: 0 0 8px;
   color: var(--gold);
-  letter-spacing: 1.5px;
+  letter-spacing: .4px;
 }
 
-p {
-  color: var(--text-muted);
+p{ margin: 0; }
+
+.muted{
+  color: var(--muted);
+  font-size: 13px;
 }
 
-/* =================================================
-   LOGIN PAGE
-   ================================================= */
-.loginCard {
-  max-width: 420px;
-  margin: auto;
-  padding: 36px;
-  background: linear-gradient(
-    160deg,
-    rgba(255,255,255,0.05),
-    var(--bg-glass)
-  );
-  border-radius: 22px;
-  border: 1px solid var(--border-soft);
-  box-shadow:
-    0 30px 60px rgba(0,0,0,0.6),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+/* ===== Forms ===== */
+label{
+  display:block;
+  margin: 10px 0 6px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
-.loginCard input {
-  width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 16px;
+input, select{
+  width:100%;
+  padding: 11px 12px;
   border-radius: 14px;
-  border: 1px solid var(--border-soft);
-  background: rgba(0,0,0,0.35);
-  color: var(--text-main);
-}
-
-.loginCard input:focus {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.18);
+  color: var(--text);
   outline: none;
-  border-color: var(--gold);
+  transition: .15s ease;
 }
 
-.loginCard button {
-  width: 100%;
-  padding: 14px;
-  border-radius: 16px;
-  border: none;
-  background: linear-gradient(135deg, #c9a24d, #a88433);
-  color: #14110e;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.25s;
+input::placeholder{ color: rgba(244,241,236,.55); }
+
+input:focus, select:focus{
+  border-color: rgba(214,176,122,.55);
+  box-shadow: 0 0 0 4px rgba(214,176,122,.12);
 }
 
-.loginCard button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 25px rgba(201,162,77,0.4);
-}
-
-#errorText {
-  text-align: center;
-  color: var(--red);
-  font-size: 0.85rem;
-}
-
-/* =================================================
-   EMPLOYEE PAGE
-   ================================================= */
-.tile,
-.actionCard {
-  background: linear-gradient(
-    160deg,
-    rgba(255,255,255,0.05),
-    var(--bg-soft)
-  );
-  border-radius: 18px;
-  border: 1px solid var(--border-soft);
-  box-shadow:
-    0 20px 40px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.05);
-}
-
-.label {
-  color: var(--gold-soft);
-  font-size: 0.85rem;
-}
-
-.value {
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-#statusText {
-  text-align: center;
-  font-weight: 600;
-}
-
-/* Buttons */
-.btnRow button,
-button {
-  padding: 12px 18px;
+/* ===== Buttons (generic) ===== */
+button{
   border-radius: 14px;
-  border: none;
-  font-weight: 600;
+  padding: 11px 14px;
+  border: 1px solid rgba(214,176,122,.35);
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: #1b120a;
+  font-weight: 800;
   cursor: pointer;
+  transition: transform .08s ease, filter .15s ease;
+  white-space: nowrap;
 }
 
-/* Check In */
-.btnIn {
+button:hover{ filter: brightness(1.03); }
+button:active{ transform: translateY(1px); }
+button:disabled{ opacity:.45; cursor:not-allowed; }
+
+/* Keep your existing class usage */
+.btn{
+  border: 1px solid rgba(214,176,122,.35);
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: #1b120a;
+  font-weight: 900;
+}
+
+/* Employee buttons */
+.btnRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.btnIn{
+  border-color: rgba(63,191,127,.40);
   background: linear-gradient(135deg, #3fbf7f, #2f9e63);
-  color: #0e1a14;
+  color: #07150e;
 }
 
-.btnIn:disabled {
-  opacity: 0.4;
-}
-
-/* Check Out */
-.btnOut {
+.btnOut{
+  border-color: rgba(217,92,92,.40);
   background: linear-gradient(135deg, #d95c5c, #b54646);
-  color: #1a0e0e;
+  color: #180808;
 }
 
-.btnOut:disabled {
-  opacity: 0.4;
-}
-
-/* Logout */
-.btnLogout {
+.btnLogout{
   background: transparent;
   color: var(--gold);
-  border: 1px solid var(--gold);
+  border: 1px solid rgba(214,176,122,.55);
 }
 
-.btnLogout:hover {
-  background: rgba(201,162,77,0.1);
+.btnLogout:hover{
+  background: rgba(214,176,122,.10);
 }
 
-/* Hint */
-#hintText {
+/* ===== Messages ===== */
+.msg{
   margin-top: 12px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.18);
+
+color: var(--muted);
+  min-height: 40px;
+  display:flex;
+  align-items:center;
+}
+
+.msg.ok{
+  border-color: rgba(63,191,127,.35);
+  background: rgba(63,191,127,.10);
+  color: rgba(210,255,225,.95);
+}
+
+.msg.err{
+  border-color: rgba(217,92,92,.35);
+  background: rgba(217,92,92,.10);
+  color: rgba(255,220,220,.95);
+}
+
+/* ===== Login Layout ===== */
+.page-login{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.page-login .wrap{
+  width: 100%;
+  max-width: 440px;
+  padding: 26px 14px 36px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  justify-content:center;
+  margin-bottom: 14px;
+  text-align:center;
+}
+
+.logo{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(214,176,122,.45);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(214,176,122,.35), transparent 55%),
+    rgba(0,0,0,.18);
+  box-shadow: 0 14px 40px rgba(0,0,0,.45);
+}
+
+.brand .title h1{
+  margin:0;
+  font-size: 22px;
+}
+
+.brand .title p{
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.page-login .card{
+  padding: 18px;
+}
+
+.hint{
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: rgba(244,241,236,.62);
+}
+
+/* ===== Employee Layout ===== */
+.page-employee .header{
+  display:flex;
+  align-items:flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.page-employee .header h1{
+  font-size: 22px;
+  margin:0;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 900px){
+  .grid{
+    grid-template-columns: 1.2fr .8fr;
+    align-items: start;
+  }
+}
+
+.stats{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 680px){
+  .stats{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.label{
+  color: rgba(244,241,236,.72);
+  font-size: 12px;
+  letter-spacing: .4px;
+}
+
+.value{
+  margin-top: 6px;
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.statusText{
+  margin: 0 0 8px;
   text-align: center;
+  font-weight: 900;
+  color: rgba(214,176,122,.92);
 }
 
-/* =================================================
-   ADMIN DASHBOARD
-   ================================================= */
-header {
-  padding: 22px 30px;
-  border-bottom: 1px solid var(--border-soft);
+/* ===== Admin basics (works with your admin.html) ===== */
+header{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(10,7,6,.72);
+  backdrop-filter: blur(14px);
 }
 
-.dashboard,
-.adminGrid {
-  padding: 30px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 22px;
+.row{
+  display:grid;
+  gap: 10px;
 }
 
-.adminCard {
-  background: linear-gradient(
-    160deg,
-    rgba(255,255,255,0.05),
-    var(--bg-soft)
-  );
-  border-radius: 20px;
-  padding: 22px;
-  border: 1px solid var(--border-soft);
-  box-shadow:
-    0 20px 40px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.05);
-}
-
-.adminCard h3 {
-  color: var(--gold-soft);
+@media (min-width: 720px){
+  /* your admin uses 3 controls in row sometimes */
+  .row{
+    grid-template-columns: 1fr 1fr 160px;
+  }
 }
 
 /* Tables */
-table {
-  width: 100%;
-  border-collapse: collapse;
+table{
+  width:100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow:hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.12);
+  min-width: 720px;
 }
 
-th, td {
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 0.85rem;
+thead th{
+  text-align: right;
+  font-size: 13px;
+  color: rgba(244,241,236,.80);
+  padding: 12px 12px;
+  background: rgba(214,176,122,.10);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(10px);
 }
 
-th {
-  color: var(--gold);
-  text-align: left;
+tbody td{
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  color: rgba(244,241,236,.92);
+  font-size: 14px;
 }
 
-/* =================================================
-   SMALL DETAILS
-   ================================================= */
-button:focus {
-  outline: none;
+tbody tr:hover td{
+  background: rgba(214,176,122,.06);
 }
 
-::-webkit-scrollbar {
-  width: 8px;
+tbody tr:last-child td{ border-bottom:none; }
+
+/* Scrollbar */
+::-webkit-scrollbar{ width: 10px; height:10px; }
+::-webkit-scrollbar-thumb{
+  background: rgba(214,176,122,.35);
+  border-radius: 8px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(201,162,77,0.4);
-  border-radius: 4px;
-}
