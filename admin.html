@@ -1,3 +1,4 @@
+> Coding:
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -6,6 +7,7 @@
   <title>The Grinders | Admin</title>
   <link rel="stylesheet" href="./assets/css/cafe-theme.css">
 </head>
+
 <body>
   <header>
     <div>
@@ -16,7 +18,8 @@
   </header>
 
   <div class="wrap">
-    <!-- ===== Existing: Add/Update user ===== -->
+
+    <!-- ========= Users Management ========= -->
     <div class="card">
       <h2>إضافة/تحديث موظف (يدوي)</h2>
       <div class="muted">مهم: UID لازم يكون من Firebase Auth (Users)</div>
@@ -42,7 +45,6 @@
       <div id="saveMsg" class="msg"></div>
     </div>
 
-    <!-- ===== Existing: Users table ===== -->
     <div class="card">
       <h2>الموظفون</h2>
       <div class="muted" id="listHint">Loading...</div>
@@ -63,23 +65,24 @@
       <div id="listMsg" class="msg"></div>
     </div>
 
-    <!-- ===== NEW: Attendance Report (NO STYLE CHANGE) ===== -->
+    <!-- ========= Reports ========= -->
     <div class="card">
-      <h2>التقارير | Reports</h2>
-      <div class="muted">فلترة حسب الموظف وحالة الحضور (Checked In / Checked Out)</div>
+      <h2>Reports | التقارير</h2>
+      <div class="muted">فلترة حسب الموظف وحالة الحضور (Checked in / Checked out)</div>
 
       <div class="row" style="margin-top:10px">
         <select id="repEmployee">
-          <option value="all">كل الموظفين | All employees</option>
+          <option value="all">All employees | كل الموظفين</option>
         </select>
 
         <select id="repState">
-          <option value="all">كل الحالات | All</option>
-          <option value="in">Checked In</option>
-          <option value="out">Checked Out</option>
+          <option value="all">All | الكل</option>
+          <option value="in">Checked in (not checked out)</option>
+          <option value="out">Checked out</option>
         </select>
 
         <button class="btn" id="repRefreshBtn">تحديث | Refresh</button>
+        <button class="btn" id="repExportBtn">Export CSV</button>
       </div>
 
       <div class="muted" id="repHint" style="margin-top:10px">Loading...</div>
@@ -88,8 +91,8 @@
         <table>
           <thead>
             <tr>
-              <th>التاريخ | Date</th>
-              <th>الاسم | Name</th>
+              <th>Date | التاريخ</th>
+              <th>Name | الاسم</th>
               <th>UID</th>
               <th>Shift</th>
               <th>Status</th>
@@ -105,6 +108,7 @@
 
       <div id="repMsg" class="msg"></div>
     </div>
+
   </div>
 
   <script type="module">
@@ -130,12 +134,14 @@
     const tbody = document.getElementById("tbody");
     const listHint = document.getElementById("listHint");
 
+> Coding:
 const listMsg = document.getElementById("listMsg");
 
-    // ===== NEW: Report elements =====
+    // Reports UI
     const repEmployee = document.getElementById("repEmployee");
     const repState = document.getElementById("repState");
     const repRefreshBtn = document.getElementById("repRefreshBtn");
+    const repExportBtn = document.getElementById("repExportBtn");
     const repHint = document.getElementById("repHint");
     const repBody = document.getElementById("repBody");
     const repMsg = document.getElementById("repMsg");
@@ -146,31 +152,23 @@ const listMsg = document.getElementById("listMsg");
     }
 
     function escapeHtml(s){
-      return String(s ?? "").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+      return String(s).replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
     }
 
     function tsToText(v){
-      if(!v) return "-";
+      if(!v) return "";
       try{
         // Firestore Timestamp
         if(typeof v.toDate === "function"){
           return v.toDate().toLocaleString();
         }
-        // ISO string or Date
-        const d = (v instanceof Date) ? v : new Date(v);
-        if(isNaN(d.getTime())) return String(v);
-        return d.toLocaleString();
+        // ISO string or Date-like
+        const d = new Date(v);
+        if(!isNaN(d.getTime())) return d.toLocaleString();
+        return String(v);
       }catch{
         return String(v);
       }
-    }
-
-    function getAttendanceState(rec){
-      const hasIn = !!rec.checkInAt;
-      const hasOut = !!rec.checkOutAt;
-      if(hasIn && !hasOut) return "in";
-      if(hasIn && hasOut) return "out";
-      return "all";
     }
 
     logoutBtn.addEventListener("click", async ()=>{
@@ -181,53 +179,71 @@ const listMsg = document.getElementById("listMsg");
     const session = await requireRole("admin");
     who.textContent = session.user.email || session.user.uid;
 
-    // ===== Existing: Load users =====
+    // ========= Users List =========
     let cachedUsers = [];
+
     async function loadUsers(){
       listHint.textContent = "Loading...";
       tbody.innerHTML = "";
       setMsg(listMsg, "", "");
+
       try{
         const snap = await getDocs(collection(db, "users"));
         const rows = [];
         snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
-        rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
 
+        rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
         cachedUsers = rows;
 
         if(rows.length === 0){
           listHint.textContent = "لا يوجد موظفين داخل users collection.";
-        }else{
-          listHint.textContent = "";
-          tbody.innerHTML = rows.map(u => `
-            <tr>
-              <td>${escapeHtml(u.name || "-")}</td>
-              <td>${escapeHtml((u.role || "employee"))}</td>
-              <td>${u.active === false ? "غير فعال" : "فعال"}</td>
-              <td style="font-family:monospace">${escapeHtml(u.id)}</td>
-              <td>${escapeHtml(u.email || "-")}</td>
-            </tr>
-          `).join("");
+          // حتى لو ماكو موظفين، خلي فلتر الموظفين يبقى All
+          fillEmployeeFilter([]);
+          return;
         }
 
-        // ===== NEW: Fill employee filter from users (no design change) =====
-        const currentVal = repEmployee.value || "all";
-        repEmployee.innerHTML = <option value="all">كل الموظفين | All employees</option> + rows
-          .filter(u => (u.role || "employee") !== "admin") // optional: show employees only
-          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
-          .join("");
-        repEmployee.value = [...repEmployee.options].some(o=>o.value===currentVal) ? currentVal : "all";
+        listHint.textContent = "";
+
+        tbody.innerHTML = rows.map(u => `
+          <tr>
+            <td>${escapeHtml(u.name || "-")}</td>
+            <td>${escapeHtml((u.role || "employee"))}</td>
+            <td>${u.active === false ? "غير فعال" : "فعال"}</td>
+            <td style="font-family:monospace">${escapeHtml(u.id)}</td>
+            <td>${escapeHtml(u.email || "-")}</td>
+          </tr>
+        `).join("");
+
+        fillEmployeeFilter(rows);
 
       }catch(e){
         console.error(e);
         listHint.textContent = "";
         setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
+        fillEmployeeFilter([]);
       }
     }
 
-    // ===== Existing: Save user =====
+    function fillEmployeeFilter(users){
+      // لا نخرب اختيار المستخدم إذا كان مختار شي
+      const prev = repEmployee.value || "all";
+
+      const opts = [
+        <option value="all">All employees | كل الموظفين</option>,
+        ...users
+          .filter(u => (u.role || "employee") !== "admin") // اختياري: إخفاء الأدمن من الفلتر
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
+      ];
+
+      repEmployee.innerHTML = opts.join("");
+      // رجّع الاختيار السابق إذا موجود
+      const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
+      repEmployee.value = stillExists ? prev : "all";
+    }
+
     saveBtn.addEventListener("click", async ()=>{
       setMsg(saveMsg,"","");
+
       const uid = uidEl.value.trim();
       const name = nameEl.value.trim();
       const role = roleEl.value;
@@ -241,54 +257,82 @@ const listMsg = document.getElementById("listMsg");
 
       try{
         const ref = doc(db, "users", uid);
-        const base = { name, role, active, updatedAt: serverTimestamp() };
+        const base = {
+          name,
+          role,
+          active,
+          updatedAt: serverTimestamp(),
+        };
         if(deviceId) base.deviceId = deviceId;
 
-        const snap = await getDoc(ref);
+> Coding:
+const snap = await getDoc(ref);
         if(!snap.exists()){
-          await setDoc(ref, { ...
-
-base, createdAt: serverTimestamp() }, { merge: true });
+          await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
         }else{
           await updateDoc(ref, base);
         }
 
         setMsg(saveMsg,"تم الحفظ ✅", "ok");
         await loadUsers();
+
       }catch(e){
         console.error(e);
         setMsg(saveMsg,"فشل الحفظ. غالبًا Rules تمنع الكتابة.", "err");
       }
     });
 
-    // ===== NEW: Attendance report =====
+    // ========= Reports =========
     let cachedAttendance = [];
+    let lastRenderedRows = [];
 
     async function loadAttendance(){
       repHint.textContent = "Loading...";
       repBody.innerHTML = "";
       setMsg(repMsg, "", "");
 
+      const timeoutMs = 12000;
+      const timeoutPromise = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error("timeout")), timeoutMs)
+      );
+
       try{
-        const snap = await getDocs(collection(db, "attendance")); // <-- اسم الكولكشن حسب صورك
+        const snap = await Promise.race([
+          getDocs(collection(db, "attendance")),
+          timeoutPromise
+        ]);
+
         const rows = [];
         snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
 
-        // ترتيب أحدث أول (حسب checkInAt أو dateKey)
         rows.sort((a,b)=>{
-          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt0).getTime();
-          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt0).getTime();
+          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt⠟⠞⠵⠺⠞⠵⠟⠺⠵⠵⠵⠟⠞0).getTime();
+          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt⠺⠟⠟⠵⠺⠺⠞⠟⠺⠟⠟⠺⠵0).getTime();
           return bd - ad;
         });
 
         cachedAttendance = rows;
-        repHint.textContent = rows.length ? "" : "لا توجد سجلات attendance حالياً.";
+
         renderAttendance();
 
+        if(rows.length === 0){
+          repHint.textContent = "لا توجد سجلات attendance حالياً.";
+        }else{
+          if(repBody.innerHTML.trim()) repHint.textContent = "";
+        }
+
       }catch(e){
-        console.error(e);
+        console.error("Attendance load error:", e);
+
         repHint.textContent = "";
-        setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
+        if(String(e?.message || "").includes("timeout")){
+          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة صلاحيات/اتصال أو Rules تمنع القراءة.", "err");
+        }else{
+          setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
+        }
+
+        repBody.innerHTML = "";
+        lastRenderedRows = [];
       }
     }
 
@@ -298,25 +342,31 @@ base, createdAt: serverTimestamp() }, { merge: true });
 
       let rows = cachedAttendance.slice();
 
-      // فلتر موظف (يحاول uid أولاً، ثم name إذا ما موجود uid)
       if(emp !== "all"){
-        rows = rows.filter(r => (r.uid === emp)(r.employeeUid === emp) || (r.id === emp));
+        rows = rows.filter(r =>
+          (r.uid === emp) ||
+          (r.userId === emp) ||
+          (r.employeeUid === emp) ||
+          (r.id === emp)
+        );
       }
 
-      // فلتر حالة
       if(st === "in"){
-        rows = rows.filter(r => getAttendanceState(r) === "in");
+        rows = rows.filter(r => !!r.checkInAt && !r.checkOutAt);
       }else if(st === "out"){
-        rows = rows.filter(r => getAttendanceState(r) === "out");
+        rows = rows.filter(r => !!r.checkInAt && !!r.checkOutAt);
       }
+
+      lastRenderedRows = rows;
 
       repBody.innerHTML = rows.map(r=>{
-        const name = r.name"-";
-        const uid = r.uidr.employeeUid || "-";
+        const name = r.name⠞⠟⠞⠺⠟⠞⠞⠞⠞⠺⠵⠺⠺⠟⠟⠺⠺⠟"-";
+        const uid = r.uid⠞⠺⠞⠞⠺⠵⠺⠟⠺⠺⠵⠞r.employeeUid || "-";
         const shift = r.shift || "-";
         const status = r.status || "-";
         const late = (r.lateMinutes ?? "-");
         const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
+
         return `
           <tr>
             <td>${escapeHtml(r.dateKey || "-")}</td>
@@ -339,14 +389,16 @@ base, createdAt: serverTimestamp() }, { merge: true });
       }
     }
 
-    repEmployee.addEventListener("change", renderAttendance);
-    repState.addEventListener("change", renderAttendance);
-    repRefreshBtn.addEventListener("click", loadAttendance);
+    function exportCSV(){
+      if(!lastRenderedRows || lastRenderedRows.length === 0){
+        setMsg(repMsg, "ماكو بيانات لتصديرها حسب الفلاتر الحالية.", "err");
+        return;
+      }
+      setMsg(repMsg, "", "");
 
-    // ===== Boot =====
-    await loadUsers();
-    await loadAttendance();
-  </script>
-</body>
-</html>
+      const headers = [
+        "dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"
+      ];
 
+      const lines = [];
+      lines.push(headers.join(","));
