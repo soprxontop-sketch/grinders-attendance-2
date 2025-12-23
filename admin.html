@@ -183,17 +183,24 @@ const listMsg = document.getElementById("listMsg");
     let cachedUsers = [];
 
     function fillEmployeeFilter(users){
-      const prev = repEmployee.value || "all";
-      const opts = [
-        <option value="all">All employees | كل الموظفين</option>,
-        ...users
-          .filter(u => (u.role || "employee") !== "admin")
-          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
-      ];
-      repEmployee.innerHTML = opts.join("");
-      const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
-      repEmployee.value = stillExists ? prev : "all";
-    }
+  const prev = repEmployee.value || "all";
+
+  const opts = [
+    <option value="all">All employees | كل الموظفين</option>,
+    ...users
+      .filter(u => (u.role || "employee") !== "admin")
+      .map(u =>
+        <option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>
+      )
+  ];
+
+  repEmployee.innerHTML = opts.join("");
+
+  const stillExists = Array.from(repEmployee.options)
+    .some(o => o.value === prev);
+
+  repEmployee.value = stillExists ? prev : "all";
+}
 
     async function loadUsers(){
       listHint.textContent = "Loading...";
