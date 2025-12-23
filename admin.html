@@ -67,7 +67,7 @@
     <!-- ========= Reports ========= -->
     <div class="card">
       <h2>Reports | التقارير</h2>
-      <div class="muted">فلترة حسب الموظف وحالة الحضور (Checked in / Checked out)</div>
+      <div class="muted">فلترة حسب الموظف وحالة الحضور + فلتر تاريخ (من/إلى)</div>
 
       <div class="row" style="margin-top:10px">
         <select id="repEmployee">
@@ -80,11 +80,15 @@
           <option value="out">Checked out</option>
         </select>
 
+        <input id="repFrom" type="date" aria-label="From date" />
+        <input id="repTo" type="date" aria-label="To date" />
+
         <button class="btn" id="repRefreshBtn">تحديث | Refresh</button>
         <button class="btn" id="repExportBtn">Export CSV</button>
       </div>
 
       <div class="muted" id="repHint" style="margin-top:10px">Loading...</div>
+      <div class="muted" id="repSummary" style="margin-top:6px"></div>
 
       <div style="overflow:auto; margin-top:10px">
         <table>
@@ -132,15 +136,17 @@
 
     const tbody = document.getElementById("tbody");
     const listHint = document.getElementById("listHint");
-
-const listMsg = document.getElementById("listMsg");
+    const listMsg = document.getElementById("listMsg");
 
     // Reports UI
     const repEmployee = document.getElementById("repEmployee");
     const repState = document.getElementById("repState");
+    const repFrom = document.getElementById("repFrom");
+    const repTo = document.getElementById("repTo");
     const repRefreshBtn = document.getElementById("repRefreshBtn");
     const repExportBtn = document.getElementById("repExportBtn");
     const repHint = document.getElementById("repHint");
+    const repSummary = document.getElementById("repSummary");
     const repBody = document.getElementById("repBody");
     const repMsg = document.getElementById("repMsg");
 
@@ -156,7 +162,9 @@ const listMsg = document.getElementById("listMsg");
     function tsToText(v){
       if(!v) return "";
       try{
-        if(typeof v.toDate === "function") return v.toDate().toLocaleString();
+        if(typeof v.toDate === "function"){
+          return v.toDate().toLocaleString();
+        }
         const d = new Date(v);
         if(!isNaN(d.getTime())) return d.toLocaleString();
         return String(v);
@@ -165,7 +173,6 @@ const listMsg = document.getElementById("listMsg");
       }
     }
 
-    // ✅ Promise timeout helper (حتى ما يظل Loading للأبد)
     function withTimeout(promise, ms, label){
       let t;
       const timeout = new Promise((_, rej)=>{
@@ -182,37 +189,16 @@ const listMsg = document.getElementById("listMsg");
     // ========= Users List =========
     let cachedUsers = [];
 
-    function fillEmployeeFilter(users){
-  const prev = repEmployee.value || "all";
-
-  const opts = [
-    `<option value="all">All employees | كل الموظفين</option>`,
-    ...users
-      .filter(u => (u.role || "employee") !== "admin")
-      .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
-  ];
-
-  repEmployee.innerHTML = opts.join("");
-
-  const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
-  repEmployee.value = stillExists ? prev : "all";
-}
-
-
     async function loadUsers(){
       listHint.textContent = "Loading...";
       tbody.innerHTML = "";
       setMsg(listMsg, "", "");
 
       try{
-        const snap = await withTimeout(
-          getDocs(collection(db, "users")),
-          12000,
-          "users"
-        );
-
+        const snap = await withTimeout(getDocs(collection(db, "users")), 12000, "users");
         const rows = [];
         snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
+
         rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
         cachedUsers = rows;
 
@@ -223,6 +209,7 @@ const listMsg = document.getElementById("listMsg");
         }
 
         listHint.textContent = "";
+
         tbody.innerHTML = rows.map(u => `
           <tr>
             <td>${escapeHtml(u.name || "-")}</td>
@@ -236,15 +223,27 @@ const listMsg = document.getElementById("listMsg");
         fillEmployeeFilter(rows);
 
       }catch(e){
-        console.error("Users load error:", e);
+        console.error(e);
         listHint.textContent = "";
-        if(String(e?.message||"").startsWith("timeout:")){
-          setMsg(listMsg, "تعليق بتحميل الموظفين (Timeout). غالبًا Rules/اتصال.", "err");
-        }else{
-          setMsg(listMsg, "مشكلة بقراءة Firestore (users). راجع Rules أو الصلاحيات.", "err");
-        }
+        setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
         fillEmployeeFilter([]);
       }
+    }
+
+    function fillEmployeeFilter(users){
+      const prev = repEmployee.value || "all";
+
+      const opts = [
+        `<option value="all">All employees | كل الموظفين</option>`,
+        ...users
+          .filter(u => (u.role || "employee") !== "admin")
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
+      ];
+
+      repEmployee.innerHTML = opts.join("");
+
+      const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
+      repEmployee.value = stillExists ? prev : "all";
     }
 
     saveBtn.addEventListener("click", async ()=>{
@@ -262,20 +261,25 @@ const listMsg = document.getElementById("listMsg");
       }
 
       try{
-
-const ref = doc(db, "users", uid);
-        const base = { name, role, active, updatedAt: serverTimestamp() };
+        const ref = doc(db, "users", uid);
+        const base = {
+          name,
+          role,
+          active,
+          updatedAt: serverTimestamp(),
+        };
         if(deviceId) base.deviceId = deviceId;
 
-        const snap = await withTimeout(getDoc(ref), 12000, "getUserDoc");
+        const snap = await getDoc(ref);
         if(!snap.exists()){
-          await withTimeout(setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true }), 12000, "setUserDoc");
+          await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
         }else{
-          await withTimeout(updateDoc(ref, base), 12000, "updateUserDoc");
+          await updateDoc(ref, base);
         }
 
         setMsg(saveMsg,"تم الحفظ ✅", "ok");
         await loadUsers();
+
       }catch(e){
         console.error(e);
         setMsg(saveMsg,"فشل الحفظ. غالبًا Rules تمنع الكتابة.", "err");
@@ -286,62 +290,9 @@ const ref = doc(db, "users", uid);
     let cachedAttendance = [];
     let lastRenderedRows = [];
 
-    function renderAttendance(){
-      const emp = repEmployee.value;
-      const st = repState.value;
-
-      let rows = cachedAttendance.slice();
-
-      if(emp !== "all"){
-        rows = rows.filter(r =>
-          (r.uid === emp) ||
-          (r.userId === emp) ||
-          (r.employeeUid === emp) ||
-          (r.id === emp)
-        );
-      }
-
-      if(st === "in"){
-        rows = rows.filter(r => !!r.checkInAt && !r.checkOutAt);
-      }else if(st === "out"){
-        rows = rows.filter(r => !!r.checkInAt && !!r.checkOutAt);
-      }
-
-      lastRenderedRows = rows;
-
-      repBody.innerHTML = rows.map(r => {
-  const name = r.name || r.employeeName || "-";
-  const uid  = r.uid || r.employeeUid || r.userId || "-";
-  const shift = r.shift || "-";
-  const status = r.status || "-";
-  const late = (r.lateMinutes ?? "-");
-  const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
-
-  return `
-    <tr>
-      <td>${escapeHtml(r.dateKey || "-")}</td>
-      <td>${escapeHtml(name)}</td>
-      <td style="font-family:monospace">${escapeHtml(uid)}</td>
-      <td>${escapeHtml(shift)}</td>
-      <td>${escapeHtml(status)}</td>
-      <td>${escapeHtml(tsToText(r.checkInAt))}</td>
-      <td>${escapeHtml(tsToText(r.checkOutAt))}</td>
-      <td>${escapeHtml(late)}</td>
-      <td>${escapeHtml(dist)}</td>
-    </tr>
-  `;
-}).join("");
-
-
-      if(rows.length === 0){
-        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
-      }else{
-        repHint.textContent = "";
-      }
-    }
-
     async function loadAttendance(){
       repHint.textContent = "Loading...";
+      repSummary.textContent = "";
       repBody.innerHTML = "";
       setMsg(repMsg, "", "");
 
@@ -355,31 +306,123 @@ const ref = doc(db, "users", uid);
         const rows = [];
         snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
 
+        // ترتيب بالأحدث + عرض آخر 300 فقط لتحسين أداء الواجهة
         rows.sort((a,b)=>{
-          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt0).getTime();
-          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt0).getTime();
-          return bd - ad;
+          const at = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : (a.checkInAt ? new Date(a.checkInAt).getTime() : 0);
+          const bt = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : (b.checkInAt ? new Date(b.checkInAt).getTime() : 0);
+          return bt - at;
         });
 
-        cachedAttendance = rows;
+        cachedAttendance = rows.slice(0, 300);
         renderAttendance();
 
-        if(rows.length === 0){
+        if(cachedAttendance.length === 0){
           repHint.textContent = "لا توجد سجلات attendance حالياً.";
         }else{
-          repHint.textContent = repBody.innerHTML.trim() ? "" : "لا توجد نتائج مطابقة للفلاتر.";
+          repHint.textContent = "";
         }
 
       }catch(e){
         console.error("Attendance load error:", e);
+
         repHint.textContent = "";
-        if(String(e?.message||"").startsWith("timeout:")){
-          setMsg(repMsg, "تعليق بتحميل التقرير (Timeout). غالبًا Rules/اتصال أو استعلام ثقيل.", "err");
+        repSummary.textContent = "";
+
+        if(String(e?.message || "").includes("timeout")){
+          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة اتصال أو Rules تمنع القراءة.", "err");
         }else{
           setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
         }
+
         repBody.innerHTML = "";
         lastRenderedRows = [];
+      }
+    }
+
+    function renderAttendance(){
+      const emp = repEmployee.value;
+      const st = repState.value;
+
+      const from = (repFrom?.value || "").trim();
+      const to = (repTo?.value || "").trim();
+
+      let rows = cachedAttendance.slice();
+
+      // فلتر الموظف
+      if(emp !== "all"){
+        rows = rows.filter(r =>
+          (r.uid === emp) ||
+          (r.userId === emp) ||
+          (r.employeeUid === emp) ||
+          (r.id === emp)
+        );
+      }
+
+      // فلتر الحالة
+      if(st === "in"){
+        rows = rows.filter(r => !!r.checkInAt && !r.checkOutAt);
+      }else if(st === "out"){
+        rows = rows.filter(r => !!r.checkInAt && !!r.checkOutAt);
+      }
+
+      // فلتر التاريخ (يعتمد على dateKey إذا موجود، وإلا نشتقه من checkInAt)
+      if(from || to){
+        rows = rows.filter(r => {
+          let dk = r.dateKey;
+          if(!dk){
+            const d = r.checkInAt?.toDate ? r.checkInAt.toDate() : (r.checkInAt ? new Date(r.checkInAt) : null);
+            if(d && !isNaN(d.getTime())){
+              dk = d.toISOString().slice(0,10);
+            }else{
+              dk = "";
+            }
+          }
+          if(from && dk && dk < from) return false;
+          if(to && dk && dk > to) return false;
+          return true;
+        });
+      }
+
+      lastRenderedRows = rows;
+
+      // ملخص سريع
+      const total = rows.length;
+      const inCount = rows.filter(r => !!r.checkInAt && !r.checkOutAt).length;
+      const outCount = rows.filter(r => !!r.checkInAt && !!r.checkOutAt).length;
+      const lateCount = rows.filter(r => (Number(r.lateMinutes || 0) > 0)).length;
+
+      repSummary.textContent = total
+        ? `Total: ${total} | In: ${inCount} | Out: ${outCount} | Late: ${lateCount}`
+        : "";
+
+      repBody.innerHTML = rows.map(r=>{
+        const name = r.name || r.employeeName || "-";
+        const uid  = r.uid || r.employeeUid || r.userId || "-";
+        const shift = r.shift || "-";
+        const status = r.status || "-";
+        const late = (r.lateMinutes ?? "-");
+        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
+
+        return `
+          <tr>
+            <td>${escapeHtml(r.dateKey || "")}</td>
+            <td>${escapeHtml(name)}</td>
+            <td style="font-family:monospace">${escapeHtml(uid)}</td>
+            <td>${escapeHtml(shift)}</td>
+            <td>${escapeHtml(status)}</td>
+            <td>${escapeHtml(tsToText(r.checkInAt))}</td>
+            <td>${escapeHtml(tsToText(r.checkOutAt))}</td>
+            <td>${escapeHtml(late)}</td>
+            <td>${escapeHtml(dist)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      if(rows.length === 0){
+        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
+        repSummary.textContent = "";
+      }else{
+        repHint.textContent = "";
       }
     }
 
@@ -390,13 +433,17 @@ const ref = doc(db, "users", uid);
       }
       setMsg(repMsg, "", "");
 
-const headers = ["dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"];
-      const lines = [headers.join(",")];
+      const headers = [
+        "dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"
+      ];
+
+      const lines = [];
+      lines.push(headers.join(","));
 
       for(const r of lastRenderedRows){
         const name = r.name || r.employeeName || "";
-const uid  = r.uid || r.employeeUid || r.userId || "";
-const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
+        const uid  = r.uid || r.userId || r.employeeUid || "";
+        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
 
         const row = [
           r.dateKey || "",
@@ -413,7 +460,7 @@ const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
         lines.push(row.join(","));
       }
 
-      const csv = "\uFEFF" + lines.join("\n");
+      const csv = "\uFEFF" + lines.join("\n"); // BOM للعربي
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
 
@@ -430,14 +477,15 @@ const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
 
     repEmployee.addEventListener("change", renderAttendance);
     repState.addEventListener("change", renderAttendance);
+    repFrom.addEventListener("change", renderAttendance);
+    repTo.addEventListener("change", renderAttendance);
     repRefreshBtn.addEventListener("click", loadAttendance);
     repExportBtn.addEventListener("click", exportCSV);
 
-    // ========= START (مع تشخيص واضح بدل التعليق) =========
     async function start(){
-      // 1) تأكيد صلاحية الأدمن (لو علق، نطبع رسالة بالصفحة)
+      // 1) تحقق من صلاحية الأدمن
       try{
-        const session = await withTimeout(requireRole("admin"), 12000, "requireRole");
+        const session = await requireRole("admin");
         who.textContent = session.user.email || session.user.uid;
       }catch(e){
         console.error("requireRole error:", e);
@@ -446,7 +494,7 @@ const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
         repHint.textContent = "";
         setMsg(listMsg, "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
         setMsg(repMsg,  "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
-        return; // لا نكمل لأن كل شيء يعتمد على الجلسة
+        return;
       }
 
       // 2) تحميل البيانات
@@ -458,4 +506,3 @@ const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
   </script>
 </body>
 </html>
-
