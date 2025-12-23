@@ -1,0 +1,191 @@
+/* ===============================
+   The Grinders – Cafe Theme
+   =============================== */
+
+:root{
+  --coffee-dark:#2B1F17;
+  --coffee-brown:#3A2A20;
+  --coffee-caramel:#C7A17A;
+  --coffee-latte:#EFE6D8;
+  --olive:#6B8E23;
+  --danger:#B6452C;
+  --shadow:0 18px 40px rgba(0,0,0,.35);
+  --radius:18px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #4a3629 0%, transparent 40%),
+    radial-gradient(1200px 600px at 90% -10%, #3b2a20 0%, transparent 40%),
+    linear-gradient(180deg, var(--coffee-dark), #140f0b 70%);
+  color:var(--coffee-latte);
+  min-height:100vh;
+}
+
+/* ====== Layout ====== */
+.center{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:24px;
+}
+.wrap{
+  max-width:1100px;
+  margin:0 auto;
+  padding:20px;
+}
+
+/* ====== Card ====== */
+.card{
+  width:min(440px, 94vw);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)),
+    var(--coffee-brown);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:22px;
+}
+.card.lg{width:min(980px, 96vw)}
+.card h2, .card h3{margin:0 0 8px}
+.card small{opacity:.85}
+
+/* ====== Brand ====== */
+.brand{
+  text-align:center;
+  margin-bottom:10px;
+}
+.brand .logo{
+  font-weight:900;
+  letter-spacing:.5px;
+  font-size:28px;
+}
+.brand .tag{opacity:.85}
+
+/* ====== Inputs ====== */
+label{display:block;margin-top:12px;opacity:.9}
+input, select{
+  width:100%;
+  margin-top:6px;
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(0,0,0,.28);
+  color:var(--coffee-latte);
+  outline:none;
+}
+input::placeholder{opacity:.6}
+input:focus, select:focus{
+  border-color:var(--coffee-caramel);
+  box-shadow:0 0 0 3px rgba(199,161,122,.25);
+}
+
+/* ====== Buttons ====== */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:12px 16px;
+  border-radius:14px;
+  border:0;
+  cursor:pointer;
+  font-weight:800;
+  background:linear-gradient(180deg, #E0B88A, var(--coffee-caramel));
+  color:#2b1f17;
+  box-shadow:0 8px 22px rgba(0,0,0,.25);
+}
+.btn.secondary{
+  background:transparent;
+  color:var(--coffee-latte);
+  border:1px solid rgba(255,255,255,.25);
+}
+.btn.danger{
+  background:linear-gradient(180deg, #E06A4F, var(--danger));
+  color:#fff;
+}
+.btn.block{width:100%;margin-top:14px}
+
+/* ====== Status ====== */
+.status{margin-top:10px;opacity:.9}
+
+/* ====== Tables (Admin) ====== */
+.table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+.table th, .table td{
+  padding:12px 10px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+  text-align:right;
+}
+.badge{
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+}
+.badge.ok{background:#2f4f1e;color:#dff2c9}
+.badge.off{background:#4a1f16;color:#ffd2c9}
+
+/* ====== Rows ====== */
+.row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:center;
+}
+
+/* ====== Employee page ====== */
+.actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+
+/* ====== Footer hint ====== */
+.hint{
+  margin-top:12px;
+  opacity:.85;
+}
+
+/* ====== Responsive ====== */
+@media (max-width:520px){
+  .card{padding:18px}
+  .brand .logo{font-size:24px}
+}
+
+.card {
+  animation: fadeUp .6s ease both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.btn {
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(0,0,0,.35);
+}
+
+/* Animations + logo polish */
+.card{animation:fadeUp .55s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.btn{transition:transform .15s ease, box-shadow .15s ease}
+.btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.35)}

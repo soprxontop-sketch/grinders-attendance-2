@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Grinders | Admin</title>
+  <style>
+    body{margin:0;font-family:Arial,sans-serif;background:#0f0a07;color:#fff}
+    header{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(20,14,10,.85);backdrop-filter: blur(10px);
+      position:sticky;top:0
+    }
+    .btn{
+      padding:10px 12px;border-radius:12px;border:0;cursor:pointer;
+      background: linear-gradient(135deg,#d6b07a,#8b5a2b); color:#1c120c; font-weight:700;
+    }
+    .wrap{padding:18px; max-width:1100px; margin:0 auto;}
+    .card{
+      background:rgba(20,14,10,.78); border:1px solid rgba(255,255,255,.10);
+      border-radius:16px; padding:16px; margin-bottom:16px;
+    }
+    h2{margin:0 0 10px}
+    table{width:100%; border-collapse: collapse; font-size:14px}
+    th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08); text-align:right}
+    th{color:#d9c6aa;font-weight:700}
+    .muted{color:rgba(255,255,255,.6);font-size:13px}
+    .row{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px}
+    input,select{
+      width:100%; padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.25); color:#fff; outline:none;
+    }
+    .msg{margin-top:8px; min-height:18px; font-size:13px}
+    .msg.err{color:#ff6b6b}
+    .msg.ok{color:#3ddc97}
+    @media (max-width:820px){.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div style="font-weight:800">Admin Panel</div>
+      <div class="muted" id="who">...</div>
+    </div>
+    <button class="btn" id="logoutBtn">Logout</button>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>إضافة/تحديث موظف (يدوي)</h2>
+      <div class="muted">مهم: UID لازم يكون من Firebase Auth (Users)</div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="uid" placeholder="UID" />
+        <input id="name" placeholder="اسم الموظف" />
+        <select id="role">
+          <option value="employee">Employee</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <select id="active">
+          <option value="true">فعال</option>
+          <option value="false">غير فعال</option>
+        </select>
+        <input id="deviceId" placeholder="Device ID (اختياري)" />
+        <button class="btn" id="saveBtn">حفظ</button>
+      </div>
+
+      <div id="saveMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>الموظفون</h2>
+      <div class="muted" id="listHint">Loading...</div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الدور</th>
+              <th>الحالة</th>
+              <th>UID</th>
+              <th>البريد</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="listMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { requireRole } from "./js/auth-guard.js";
+    import { logout } from "./js/auth.js";
+    import {
+      db,
+      doc, getDoc, setDoc, updateDoc, serverTimestamp,
+      collection, getDocs
+    } from "./js/firebase.js";
+
+    const who = document.getElementById("who");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const uidEl = document.getElementById("uid");
+    const nameEl = document.getElementById("name");
+    const roleEl = document.getElementById("role");
+    const activeEl = document.getElementById("active");
+    const deviceEl = document.getElementById("deviceId");
+    const saveBtn = document.getElementById("saveBtn");
+    const saveMsg = document.getElementById("saveMsg");
+
+    const tbody = document.getElementById("tbody");
+    const listHint = document.getElementById("listHint");
+    const listMsg = document.getElementById("listMsg");
+
+    function setMsg(el, text, kind){
+      el.textContent = text || "";
+      el.className = "msg" + (kind ? (" " + kind) : "");
+    }
+
+    logoutBtn.addEventListener("click", async ()=>{
+      await logout();
+      window.location.replace("./login.html");
+    });
+
+    const session = await requireRole("admin");
+    who.textContent = session.user.email || session.user.uid;
+
+    async function loadUsers(){
+      listHint.textContent = "Loading...";
+      tbody.innerHTML = "";
+      setMsg(listMsg, "", "");
+      try{
+        const snap = await getDocs(collection(db, "users"));
+        const rows = [];
+        snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
+
+        rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+
+        if(rows.length === 0){
+          listHint.textContent = "لا يوجد موظفين داخل users collection.";
+          return;
+        }
+        listHint.textContent = "";
+
+        tbody.innerHTML = rows.map(u => `
+          <tr>
+            <td>${escapeHtml(u.name || "-")}</td>
+            <td>${escapeHtml((u.role || "employee"))}</td>
+            <td>${u.active === false ? "غير فعال" : "فعال"}</td>
+            <td style="font-family:monospace">${escapeHtml(u.id)}</td>
+            <td>${escapeHtml(u.email || "-")}</td>
+          </tr>
+        `).join("");
+      }catch(e){
+        console.error(e);
+        listHint.textContent = "";
+        setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
+      }
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    saveBtn.addEventListener("click", async ()=>{
+      setMsg(saveMsg,"","");
+      const uid = uidEl.value.trim();
+      const name = nameEl.value.trim();
+      const role = roleEl.value;
+      const active = activeEl.value === "true";
+      const deviceId = deviceEl.value.trim();
+
+      if(!uid){
+        setMsg(saveMsg,"UID مطلوب", "err");
+        return;
+      }
+
+      try{
+        const ref = doc(db, "users", uid);
+        const base = {
+          name,
+          role,
+          active,
+          updatedAt: serverTimestamp(),
+        };
+        if(deviceId) base.deviceId = deviceId;
+
+        const snap = await getDoc(ref);
+        if(!snap.exists()){
+          await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
+        }else{
+          await updateDoc(ref, base);
+        }
+
+        setMsg(saveMsg,"تم الحفظ ✅", "ok");
+        await loadUsers();
+      }catch(e){
+        console.error(e);
+        setMsg(saveMsg,"فشل الحفظ. غالبًا Rules تمنع الكتابة.", "err");
+      }
+    });
+
+    await loadUsers();
+  </script>
+</body>
+</html>
