@@ -1,4 +1,3 @@
-> Coding:
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -120,7 +119,6 @@
       collection, getDocs
     } from "./js/firebase.js";
 
-    // ===== DOM =====
     const who = document.getElementById("who");
     const logoutBtn = document.getElementById("logoutBtn");
 
@@ -133,11 +131,9 @@
     const saveMsg = document.getElementById("saveMsg");
 
     const tbody = document.getElementById("tbody");
-    const listHint = document.
+    const listHint = document.getElementById("listHint");
 
-> Coding:
-getElementById("listHint");
-    const listMsg = document.getElementById("listMsg");
+const listMsg = document.getElementById("listMsg");
 
     // Reports UI
     const repEmployee = document.getElementById("repEmployee");
@@ -148,7 +144,6 @@ getElementById("listHint");
     const repBody = document.getElementById("repBody");
     const repMsg = document.getElementById("repMsg");
 
-    // ===== Helpers =====
     function setMsg(el, text, kind){
       el.textContent = text || "";
       el.className = "msg" + (kind ? (" " + kind) : "");
@@ -170,28 +165,50 @@ getElementById("listHint");
       }
     }
 
-    // ===== Logout =====
+    // ✅ Promise timeout helper (حتى ما يظل Loading للأبد)
+    function withTimeout(promise, ms, label){
+      let t;
+      const timeout = new Promise((_, rej)=>{
+        t = setTimeout(()=> rej(new Error(`timeout:${label || "op"}`)), ms);
+      });
+      return Promise.race([promise, timeout]).finally(()=> clearTimeout(t));
+    }
+
     logoutBtn.addEventListener("click", async ()=>{
       await logout();
       window.location.replace("./login.html");
     });
 
-    // ===== State =====
+    // ========= Users List =========
     let cachedUsers = [];
-    let cachedAttendance = [];
-    let lastRenderedRows = [];
 
-    // ===== Users =====
+    function fillEmployeeFilter(users){
+      const prev = repEmployee.value || "all";
+      const opts = [
+        <option value="all">All employees | كل الموظفين</option>,
+        ...users
+          .filter(u => (u.role || "employee") !== "admin")
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
+      ];
+      repEmployee.innerHTML = opts.join("");
+      const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
+      repEmployee.value = stillExists ? prev : "all";
+    }
+
     async function loadUsers(){
       listHint.textContent = "Loading...";
       tbody.innerHTML = "";
       setMsg(listMsg, "", "");
 
       try{
-        const snap = await getDocs(collection(db, "users"));
+        const snap = await withTimeout(
+          getDocs(collection(db, "users")),
+          12000,
+          "users"
+        );
+
         const rows = [];
         snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
-
         rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
         cachedUsers = rows;
 
@@ -202,7 +219,6 @@ getElementById("listHint");
         }
 
         listHint.textContent = "";
-
         tbody.innerHTML = rows.map(u => `
           <tr>
             <td>${escapeHtml(u.name || "-")}</td>
@@ -218,25 +234,13 @@ getElementById("listHint");
       }catch(e){
         console.error("Users load error:", e);
         listHint.textContent = "";
-        setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
+        if(String(e?.message||"").startsWith("timeout:")){
+          setMsg(listMsg, "تعليق بتحميل الموظفين (Timeout). غالبًا Rules/اتصال.", "err");
+        }else{
+          setMsg(listMsg, "مشكلة بقراءة Firestore (users). راجع Rules أو الصلاحيات.", "err");
+        }
         fillEmployeeFilter([]);
       }
-    }
-
-    function fillEmployeeFilter(users){
-      const prev = repEmployee.value || "all";
-
-      const opts = [
-        <option value="all">All employees | كل الموظفين</option>,
-        ...users
-          .filter(u => (u.role || "employee") !== "admin")
-          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
-      ];
-
-      repEmployee.innerHTML = opts.join("");
-
-      const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
-      repEmployee.value = stillExists ? prev : "all";
     }
 
     saveBtn.addEventListener("click", async ()=>{
@@ -254,82 +258,29 @@ getElementById("listHint");
       }
 
       try{
-        const ref = doc(db, "users", uid);
-        const base = {
-          name,
-          role,
-          active,
-          updatedAt: serverTimestamp(),
-        };
+
+const ref = doc(db, "users", uid);
+        const base = { name, role, active, updatedAt: serverTimestamp() };
         if(deviceId) base.deviceId = deviceId;
 
-        const snap = await getDoc(ref);
+        const snap = await withTimeout(getDoc(ref), 12000, "getUserDoc");
         if(!snap.exists()){
-          await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
+          await withTimeout(setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true }), 12000, "setUserDoc");
         }else{
-          await updateDoc(ref, base);
+          await withTimeout(updateDoc(ref, base), 12000, "updateUserDoc");
         }
 
-> Coding:
-setMsg(saveMsg,"تم الحفظ ✅", "ok");
+        setMsg(saveMsg,"تم الحفظ ✅", "ok");
         await loadUsers();
-
       }catch(e){
         console.error(e);
         setMsg(saveMsg,"فشل الحفظ. غالبًا Rules تمنع الكتابة.", "err");
       }
     });
 
-    // ===== Reports =====
-    async function loadAttendance(){
-      repHint.textContent = "Loading...";
-      repBody.innerHTML = "";
-      setMsg(repMsg, "", "");
-
-      const timeoutMs = 12000;
-      const timeoutPromise = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error("timeout")), timeoutMs)
-      );
-
-      try{
-        const snap = await Promise.race([
-          getDocs(collection(db, "attendance")),
-          timeoutPromise
-        ]);
-
-        const rows = [];
-        snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-
-        rows.sort((a,b)=>{
-          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt⠵⠞⠟⠞⠺⠺⠞⠞⠵⠟⠞⠞⠵0).getTime();
-          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt⠟⠞⠞⠵⠟⠵⠞⠞⠵⠟⠺⠟⠺0).getTime();
-          return bd - ad;
-        });
-
-        cachedAttendance = rows;
-
-        renderAttendance();
-
-        if(rows.length === 0){
-          repHint.textContent = "لا توجد سجلات attendance حالياً.";
-        }else{
-          repHint.textContent = repBody.innerHTML.trim() ? "" : "لا توجد نتائج مطابقة للفلاتر.";
-        }
-
-      }catch(e){
-        console.error("Attendance load error:", e);
-        repHint.textContent = "";
-
-        if(String(e?.message || "").includes("timeout")){
-          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة اتصال/صلاحيات أو Rules تمنع القراءة.", "err");
-        }else{
-          setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
-        }
-
-        repBody.innerHTML = "";
-        lastRenderedRows = [];
-      }
-    }
+    // ========= Reports =========
+    let cachedAttendance = [];
+    let lastRenderedRows = [];
 
     function renderAttendance(){
       const emp = repEmployee.value;
@@ -355,8 +306,8 @@ setMsg(saveMsg,"تم الحفظ ✅", "ok");
       lastRenderedRows = rows;
 
       repBody.innerHTML = rows.map(r=>{
-        const name = r.name⠟⠞⠟⠞⠞⠵⠺⠟⠟⠵⠵⠞⠺⠟⠵⠟⠺⠵"-";
-        const uid = r.uid⠺⠟⠺⠺⠵⠺⠵⠟⠟⠞⠵⠞r.employeeUid || "-";
+        const name = r.name"-";
+        const uid = r.uidr.employeeUid || "-";
         const shift = r.shift || "-";
         const status = r.status || "-";
         const late = (r.lateMinutes ?? "-");
@@ -377,7 +328,54 @@ setMsg(saveMsg,"تم الحفظ ✅", "ok");
         `;
       }).join("");
 
-      repHint.textContent = rows.length ? "" : "لا توجد نتائج مطابقة للفلاتر.";
+      if(rows.length === 0){
+        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
+      }else{
+        repHint.textContent = "";
+      }
+    }
+
+    async function loadAttendance(){
+      repHint.textContent = "Loading...";
+      repBody.innerHTML = "";
+      setMsg(repMsg, "", "");
+
+      try{
+        const snap = await withTimeout(
+          getDocs(collection(db, "attendance")),
+          12000,
+          "attendance"
+        );
+
+        const rows = [];
+        snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+
+        rows.sort((a,b)=>{
+          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt0).getTime();
+          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt0).getTime();
+          return bd - ad;
+        });
+
+        cachedAttendance = rows;
+        renderAttendance();
+
+        if(rows.length === 0){
+          repHint.textContent = "لا توجد سجلات attendance حالياً.";
+        }else{
+          repHint.textContent = repBody.innerHTML.trim() ? "" : "لا توجد نتائج مطابقة للفلاتر.";
+        }
+
+      }catch(e){
+        console.error("Attendance load error:", e);
+        repHint.textContent = "";
+        if(String(e?.message||"").startsWith("timeout:")){
+          setMsg(repMsg, "تعليق بتحميل التقرير (Timeout). غالبًا Rules/اتصال أو استعلام ثقيل.", "err");
+        }else{
+          setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
+        }
+        repBody.innerHTML = "";
+        lastRenderedRows = [];
+      }
     }
 
     function exportCSV(){
@@ -387,16 +385,12 @@ setMsg(saveMsg,"تم الحفظ ✅", "ok");
       }
       setMsg(repMsg, "", "");
 
-      const headers = [
-        "dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"
-      ];
-
-      const lines = [];
-      lines.push(headers.join(","));
+const headers = ["dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"];
+      const lines = [headers.join(",")];
 
       for(const r of lastRenderedRows){
-        const name = r.name⠺⠵⠞⠟⠟⠵⠟⠟⠞⠟⠵⠺⠺⠺⠞⠞⠞⠟"";
-        const uid  = r.uid⠞⠟⠵⠺⠵⠟⠟⠺⠺⠺⠟⠟r.employeeUid || "";
+        const name = r.name"";
+        const uid  = r.uidr.employeeUid || "";
         const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
 
         const row = [
@@ -404,4 +398,59 @@ setMsg(saveMsg,"تم الحفظ ✅", "ok");
           name,
           uid,
           r.shift || "",
-          r.
+          r.status || "",
+          tsToText(r.checkInAt),
+          tsToText(r.checkOutAt),
+          (r.lateMinutes ?? ""),
+          dist
+        ].map(v => `"${String(v ?? "").replace(/"/g, '""')}"`);
+
+        lines.push(row.join(","));
+      }
+
+      const csv = "\uFEFF" + lines.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = attendance_report_${new Date().toISOString().slice(0,10)}.csv;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      setMsg(repMsg, "تم تصدير CSV ✅", "ok");
+    }
+
+    repEmployee.addEventListener("change", renderAttendance);
+    repState.addEventListener("change", renderAttendance);
+    repRefreshBtn.addEventListener("click", loadAttendance);
+    repExportBtn.addEventListener("click", exportCSV);
+
+    // ========= START (مع تشخيص واضح بدل التعليق) =========
+    async function start(){
+      // 1) تأكيد صلاحية الأدمن (لو علق، نطبع رسالة بالصفحة)
+      try{
+        const session = await withTimeout(requireRole("admin"), 12000, "requireRole");
+        who.textContent = session.user.email || session.user.uid;
+      }catch(e){
+        console.error("requireRole error:", e);
+        who.textContent = "Auth error";
+        listHint.textContent = "";
+        repHint.textContent = "";
+        setMsg(listMsg, "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
+        setMsg(repMsg,  "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
+        return; // لا نكمل لأن كل شيء يعتمد على الجلسة
+      }
+
+      // 2) تحميل البيانات
+      await loadUsers();
+      await loadAttendance();
+    }
+
+    start();
+  </script>
+</body>
+</html>
+
