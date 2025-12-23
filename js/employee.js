@@ -1,3 +1,4 @@
+// js/employee.js
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
@@ -17,7 +18,6 @@ const MAX_ACCURACY_M = 80;
 
 // ====== DEVICE ID (UUID) ======
 const DEVICE_KEY = "device_uuid";
-
 function getDeviceId() {
   let id = localStorage.getItem(DEVICE_KEY);
   if (!id) {
@@ -26,7 +26,6 @@ function getDeviceId() {
   }
   return id;
 }
-
 const DEVICE_ID = getDeviceId();
 
 // ====== UI refs ======
@@ -50,6 +49,7 @@ if (cafeVal) cafeVal.textContent = `${CAFE_LAT}, ${CAFE_LNG}`;
 let currentUser = null;
 let lastGPS = null;
 let lastType = null;
+let loggedLoginOnce = false;
 
 // ====== HELPERS ======
 function fmt(n, digits = 1) {
@@ -81,17 +81,17 @@ function setButtonsEnabled({ canCheckIn, canCheckOut }) {
 }
 
 // ====== AUDIT LOG ======
-async function logAudit({ action, reason }) {
+async function logAudit({ eventType, reason }) {
   try {
     await addDoc(collection(db, "audit_logs"), {
-      action,
-      reason,
+      eventType,                 // e.g. LOGIN, LOGOUT, CHECK_IN, CHECK_OUT, DENIED
+      reason,                    // e.g. success, out_of_range, gps_weak, device_mismatch
       uid: currentUser?.uid || null,
       email: currentUser?.email || null,
       deviceId: DEVICE_ID,
       lat: lastGPS?.lat ?? null,
       lng: lastGPS?.lng ?? null,
-      accuracy: lastGPS?.accuracy ?? null,
+      accuracyM: lastGPS?.accuracy ?? null,
       distanceM: lastGPS?.distance ?? null,
       createdAt: serverTimestamp()
     });
@@ -111,7 +111,7 @@ async function getGPSOnce() {
         const distance = haversineMeters(lat, lng, CAFE_LAT, CAFE_LNG);
         resolve({ lat, lng, accuracy, distance });
       },
-      reject,
+      (err) => reject(err),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   });
@@ -128,7 +128,7 @@ function renderGPS(gps) {
 async function refreshStatusFromFirestore(uid) {
   const snap = await getDoc(doc(db, "users", uid));
   if (snap.exists()) {
-    lastType = snap.data().lastType || null;
+    lastType = snap.data().lastType || null; // "checkin" or "checkout"
     if (attVal) attVal.textContent = lastType ? lastType.toUpperCase() : "—";
     if (shiftVal) shiftVal.textContent = snap.data().currentShift || "—";
   }
@@ -146,51 +146,64 @@ function decideButtons(gps) {
 async function writeAttendance(type) {
   if (!currentUser) return;
 
-  if (!lastGPS) {
+  // update GPS first
+  try {
     lastGPS = await getGPSOnce();
     renderGPS(lastGPS);
+  } catch (e) {
+    await logAudit({ eventType: "DENIED", reason: "gps_error" });
+    alert("تعذر الحصول على GPS");
+    return;
   }
 
+  // GPS checks
   if (lastGPS.accuracy > MAX_ACCURACY_M) {
-    await logAudit({ action: "DENIED", reason: "gps_weak" });
+    await logAudit({ eventType: "DENIED", reason: "gps_weak" });
     alert("GPS accuracy ضعيف");
     return;
   }
 
   if (lastGPS.distance > MAX_DISTANCE_M) {
-    await logAudit({ action: "DENIED", reason: "out_of_range" });
+    await logAudit({ eventType: "DENIED", reason: "out_of_range" });
     alert("Out of range");
     return;
   }
 
+  // device binding check
   const userRef = doc(db, "users", currentUser.uid);
   const userSnap = await getDoc(userRef);
 
   if (userSnap.exists()) {
     const savedDevice = userSnap.data().deviceId;
     if (savedDevice && savedDevice !== DEVICE_ID) {
-      await logAudit({ action: "DENIED", reason: "device_mismatch" });
+      await logAudit({ eventType: "DENIED", reason: "device_mismatch" });
       alert("هذا الحساب مربوط بجهاز آخر");
       return;
     }
   }
 
+  // ensure deviceId stored on user
   await setDoc(userRef, { deviceId: DEVICE_ID }, { merge: true });
 
+  // write attendance record
   await addDoc(collection(db, "attendance"), {
     uid: currentUser.uid,
     email: currentUser.email || null,
-    type,
+    type,                         // "checkin" | "checkout"
     lat: lastGPS.lat,
     lng: lastGPS.lng,
-    accuracy: lastGPS.accuracy,
-    distance: lastGPS.distance,
+    accuracyM: lastGPS.accuracy,
+    distanceM: lastGPS.distance,
     deviceId: DEVICE_ID,
     timestamp: serverTimestamp()
   });
 
+  // update user's lastType
   await setDoc(userRef, { lastType: type }, { merge: true });
-  await logAudit({ action: type.toUpperCase(), reason: "success" });
+
+  // audit event type (proper)
+  const eventType = type === "checkin" ? "CHECK_IN" : "CHECK_OUT";
+  await logAudit({ eventType, reason: "success" });
 
   lastType = type;
   setStatus(type === "checkin" ? "Checked in ✅" : "Checked out ✅");
@@ -200,7 +213,12 @@ async function writeAttendance(type) {
 // ====== EVENTS ======
 checkInBtn?.addEventListener("click", () => writeAttendance("checkin"));
 checkOutBtn?.addEventListener("click", () => writeAttendance("checkout"));
+
 logoutBtn?.addEventListener("click", async () => {
+  // log logout before signout
+  try {
+    await logAudit({ eventType: "LOGOUT", reason: "success" });
+  } catch {}
   await signOut(auth);
   window.location.href = "./login.html";
 });
@@ -214,14 +232,34 @@ onAuthStateChanged(auth, async (user) => {
     window.location.href = "./login.html";
     return;
   }
+
   currentUser = user;
+
+  // log login once per page-load (prevents spam)
+  if (!loggedLoginOnce) {
+    loggedLoginOnce = true;
+    await logAudit({ eventType: "LOGIN", reason: "success" });
+  }
+
   await refreshStatusFromFirestore(user.uid);
-  lastGPS = await getGPSOnce();
-  renderGPS(lastGPS);
-  decideButtons(lastGPS);
-  setInterval(async () => {
+
+  // initial GPS + buttons
+  try {
     lastGPS = await getGPSOnce();
     renderGPS(lastGPS);
     decideButtons(lastGPS);
+    setStatus("Ready ✅");
+  } catch (e) {
+    setStatus("GPS error");
+    decideButtons(null);
+  }
+
+  // periodic GPS refresh
+  setInterval(async () => {
+    try {
+      lastGPS = await getGPSOnce();
+      renderGPS(lastGPS);
+      decideButtons(lastGPS);
+    } catch {}
   }, 10000);
 });
