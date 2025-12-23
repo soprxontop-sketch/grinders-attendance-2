@@ -394,9 +394,9 @@ const headers = ["dateKey","name","uid","shift","status","checkInAt","checkOutAt
       const lines = [headers.join(",")];
 
       for(const r of lastRenderedRows){
-        const name = r.name"";
-        const uid  = r.uidr.employeeUid || "";
-        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
+        const name = r.name || r.employeeName || "";
+const uid  = r.uid || r.employeeUid || r.userId || "";
+const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
 
         const row = [
           r.dateKey || "",
