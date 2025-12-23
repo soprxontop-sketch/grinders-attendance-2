@@ -37,7 +37,7 @@ let lastType = null; // "checkin" | "checkout" | null
 function setStatus(msg, type = "info") {
   // type: info | good | bad | warn
   const dotClass = type === "good" ? "good" : type === "bad" ? "bad" : type === "warn" ? "warn" : "warn";
-  statusText.innerHTML = <span class="pill"><span class="dot ${dotClass}"></span>${msg}</span>;
+  statusText.innerHTML = `<span class="pill"><span class="dot ${dotClass}"></span>${msg}</span>`;
 }
 
 function fmt(n, digits = 1) {
@@ -247,5 +247,6 @@ onAuthStateChanged(auth, async (user) => {
   // optional: refresh GPS every 20 seconds
   setInterval(refreshGPS, 20000);
 });
+
 
 
