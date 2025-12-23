@@ -26,7 +26,7 @@ const checkInBtn = document.getElementById("checkInBtn");
 const checkOutBtn = document.getElementById("checkOutBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 
-cafeVal.textContent = ${CAFE_LAT}, ${CAFE_LNG};
+cafeVal.textContent = `${CAFE_LAT}, ${CAFE_LNG}`;
 
 // ====== STATE ======
 let currentUser = null;
@@ -247,6 +247,7 @@ onAuthStateChanged(auth, async (user) => {
   // optional: refresh GPS every 20 seconds
   setInterval(refreshGPS, 20000);
 });
+
 
 
 
