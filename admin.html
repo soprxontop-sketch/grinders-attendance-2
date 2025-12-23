@@ -5,259 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Grinders | Admin</title>
   <link rel="stylesheet" href="./assets/css/cafe-theme.css">
-
-  <!-- Luxury cafe admin styling (visual only) -->
-  <style>
-    :root{
-      --bg0:#070606;
-      --bg1:#0c0a08;
-      --card: rgba(20,14,10,.82);
-      --card2: rgba(26,18,12,.72);
-      --stroke: rgba(255,255,255,.10);
-      --stroke2: rgba(214,176,122,.22);
-      --text:#f4f1ec;
-      --muted: rgba(244,241,236,.68);
-      --gold:#d6b07a;
-      --gold2:#b88a4b;
-      --shadow: 0 18px 60px rgba(0,0,0,.55);
-      --radius: 18px;
-    }
-
-    *{ box-sizing:border-box; }
-
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(900px 500px at 15% 10%, rgba(214,176,122,.18), transparent 60%),
-        radial-gradient(900px 600px at 85% 0%, rgba(214,176,122,.10), transparent 55%),
-        radial-gradient(1200px 700px at 50% 110%, rgba(120,80,40,.14), transparent 60%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-      min-height:100vh;
-    }
-
-    /* Keep RTL but prevent “everything sticking right” */
-    .wrap, header, table, input, select, button{
-      direction: rtl;
-    }
-
-    header{
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding: 16px 18px;
-      border-bottom: 1px solid var(--stroke);
-      background: rgba(10,7,6,.75);
-      backdrop-filter: blur(14px);
-    }
-
-    header > div{
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-    }
-
-    header > div > div:first-child{
-      font-size: 16px;
-      letter-spacing:.2px;
-    }
-
-    .muted{
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .wrap{
-      max-width: 1100px;
-      margin: 22px auto;
-      padding: 0 14px 34px;
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    @media (min-width: 920px){
-      .wrap{
-        grid-template-columns: 1fr 1.2fr;
-        align-items:start;
-      }
-    }
-
-    .card{
-      background: linear-gradient(180deg, var(--card), var(--card2));
-      border: 1px solid var(--stroke2);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 16px 16px 14px;
-      position: relative;
-      overflow:hidden;
-    }
-
-    .card::before{
-      content:"";
-      position:absolute;
-      inset:-2px;
-      background:
-        radial-gradient(500px 120px at 20% 0%, rgba(214,176,122,.18), transparent 60%),
-        radial-gradient(420px 140px at 80% 0%, rgba(214,176,122,.10), transparent 60%);
-      pointer-events:none;
-      opacity:.85;
-    }
-
-    .card > *{ position:relative; }
-
-    h2{
-      margin: 0 0 6px;
-      font-size: 18px;
-      font-weight: 800;
-      letter-spacing:.2px;
-    }
-
-    /* Nice divider line under titles */
-    .card h2::after{
-      content:"";
-      display:block;
-      margin-top:10px;
-      height:1px;
-      width:100%;
-      background: linear-gradient(90deg, rgba(214,176,122,.35), transparent);
-      opacity:.9;
-    }
-
-    .row{
-      display:grid;
-      grid-template-columns: 1fr 1fr 140px;
-      gap: 10px;
-    }
-
-    @media (max-width: 720px){
-      .row{
-        grid-template-columns: 1fr;
-      }
-    }
-
-    input, select{
-      width:100%;
-      padding: 11px 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.18);
-      color: var(--text);
-      outline: none;
-      transition: .15s ease;
-    }
-
-    input::placeholder{
-      color: rgba(244,241,236,.55);
-    }
-
-    input:focus, select:focus{
-      border-color: rgba(214,176,122,.55);
-      box-shadow: 0 0 0 4px rgba(214,176,122,.12);
-    }
-
-    /* Buttons */
-    .btn{
-      padding: 11px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(214,176,122,.35);
-      background: linear-gradient(135deg, var(--gold), var(--gold2));
-      color: #1b120a;
-      font-weight: 800;
-      cursor: pointer;
-      transition: transform .08s ease, filter .15s ease;
-      white-space:nowrap;
-    }
-    .btn:hover{ filter: brightness(1.03); }
-    .btn:active{ transform: translateY(1px); }
-
-    /* Header logout button */
-    #logoutBtn{
-      border-radius: 14px;
-      padding: 10px 14px;
-    }
-
-    /* Messages */
-    .msg{
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.18);
-      color: var(--muted);
-      min-height: 40px;
-      display:flex;
-      align-items:center;
-    }
-    .msg.ok{
-      border-color: rgba(70, 200, 120, .35);
-      background: rgba(70, 200, 120, .10);
-      color: rgba(210,255,225,.95);
-    }
-    .msg.err{
-      border-color: rgba(255, 90, 90, .35);
-      background: rgba(255, 90, 90, .10);
-      color: rgba(255,220,220,.95);
-    }
-
-    /* Table */
-    table{
-      width:100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      overflow:hidden;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.12);
-      min-width: 720px; /* keep scroll for small screens */
-    }
-
-    thead th{
-      text-align: right;
-      font-size: 13px;
-      color: rgba(244,241,236,.80);
-      padding: 12px 12px;
-      background: rgba(214,176,122,.10);
-      border-bottom: 1px solid rgba(255,255,255,.10);
-      position: sticky;
-      top: 0;
-      backdrop-filter: blur(10px);
-    }
-
-    tbody td{
-      padding: 11px 12px;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      color: rgba(244,241,236,.92);
-      font-size: 14px;
-    }
-
-    tbody tr:hover td{
-      background: rgba(214,176,122,.06);
-    }
-
-    tbody tr:last-child td{
-      border-bottom:none;
-    }
-
-    /* Small badge feel for role/status */
-    tbody td:nth-child(2),
-    tbody td:nth-child(3){
-      font-weight: 700;
-    }
-
-    /* Reduce inline spacing issues */
-    .card .muted{
-      margin-top: 8px;
-      line-height: 1.4;
-    }
-  </style>
 </head>
 
-<body>
+<body class="page-admin">
   <header>
     <div>
       <div style="font-weight:800">Admin Panel</div>
@@ -295,6 +45,7 @@
     <div class="card">
       <h2>الموظفون</h2>
       <div class="muted" id="listHint">Loading...</div>
+
       <div style="overflow:auto; margin-top:10px">
         <table>
           <thead>
@@ -309,6 +60,7 @@
           <tbody id="tbody"></tbody>
         </table>
       </div>
+
       <div id="listMsg" class="msg"></div>
     </div>
   </div>
@@ -377,7 +129,8 @@
           </tr>
         `).join("");
       }catch(e){
-        console.error(e);
+
+console.error(e);
         listHint.textContent = "";
         setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
       }
@@ -429,3 +182,4 @@
   </script>
 </body>
 </html>
+
