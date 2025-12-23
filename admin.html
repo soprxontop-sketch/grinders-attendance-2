@@ -67,7 +67,7 @@
     <!-- ========= Reports ========= -->
     <div class="card">
       <h2>Reports | التقارير</h2>
-      <div class="muted">فلترة حسب الموظف وحالة الحضور + فلتر تاريخ (من/إلى)</div>
+      <div class="muted">فلترة حسب الموظف وحالة الحضور (Checked in / Checked out)</div>
 
       <div class="row" style="margin-top:10px">
         <select id="repEmployee">
@@ -80,15 +80,11 @@
           <option value="out">Checked out</option>
         </select>
 
-        <input id="repFrom" type="date" aria-label="From date" />
-        <input id="repTo" type="date" aria-label="To date" />
-
         <button class="btn" id="repRefreshBtn">تحديث | Refresh</button>
         <button class="btn" id="repExportBtn">Export CSV</button>
       </div>
 
       <div class="muted" id="repHint" style="margin-top:10px">Loading...</div>
-      <div class="muted" id="repSummary" style="margin-top:6px"></div>
 
       <div style="overflow:auto; margin-top:10px">
         <table>
@@ -112,6 +108,66 @@
       <div id="repMsg" class="msg"></div>
     </div>
 
+    <!-- ========= Audit Logs ========= -->
+    <div class="card">
+      <h2>Audit Logs | سجل التدقيق</h2>
+      <div class="muted">فلترة حسب الموظف/نوع الحدث/السبب + تاريخ (من/إلى)</div>
+
+      <div class="row" style="margin-top:10px">
+        <input type="date" id="audFrom" />
+        <input type="date" id="audTo" />
+
+        <select id="audEmployee">
+          <option value="all">All employees | كل الموظفين</option>
+        </select>
+
+        <select id="audType">
+          <option value="all">All event types</option>
+          <option value="LOGIN">LOGIN</option>
+          <option value="LOGOUT">LOGOUT</option>
+          <option value="CHECK_IN">CHECK_IN</option>
+          <option value="CHECK_OUT">CHECK_OUT</option>
+          <option value="DENIED">DENIED</option>
+        </select>
+
+        <select id="audReason">
+          <option value="all">All reasons</option>
+          <option value="success">success</option>
+          <option value="out_of_range">out_of_range</option>
+          <option value="gps_weak">gps_weak</option>
+          <option value="device_mismatch">device_mismatch</option>
+          <option value="gps_error">gps_error</option>
+        </select>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="audRefreshBtn">تحديث | Refresh</button>
+        <button class="btn" id="audExportBtn">Export CSV</button>
+      </div>
+
+      <div class="muted" id="audHint" style="margin-top:10px">Loading...</div>
+
+      <div style="overflow:auto; margin-top:10px">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Name</th>
+              <th>UID</th>
+              <th>Event</th>
+              <th>Reason</th>
+              <th>Device ID</th>
+              <th>Distance (m)</th>
+              <th>Accuracy (m)</th>
+            </tr>
+          </thead>
+          <tbody id="audBody"></tbody>
+        </table>
+      </div>
+
+      <div id="audMsg" class="msg"></div>
+    </div>
+
   </div>
 
   <script type="module">
@@ -122,6 +178,11 @@
       doc, getDoc, setDoc, updateDoc, serverTimestamp,
       collection, getDocs
     } from "./js/firebase.js";
+
+    // Firestore query helpers (CDN) - no dependency on your firebase.js exports
+    import {
+      query, where, orderBy, limit, Timestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     const who = document.getElementById("who");
     const logoutBtn = document.getElementById("logoutBtn");
@@ -141,14 +202,23 @@
     // Reports UI
     const repEmployee = document.getElementById("repEmployee");
     const repState = document.getElementById("repState");
-    const repFrom = document.getElementById("repFrom");
-    const repTo = document.getElementById("repTo");
     const repRefreshBtn = document.getElementById("repRefreshBtn");
     const repExportBtn = document.getElementById("repExportBtn");
     const repHint = document.getElementById("repHint");
-    const repSummary = document.getElementById("repSummary");
     const repBody = document.getElementById("repBody");
     const repMsg = document.getElementById("repMsg");
+
+    // Audit UI
+    const audFrom = document.getElementById("audFrom");
+    const audTo = document.getElementById("audTo");
+    const audEmployee = document.getElementById("audEmployee");
+    const audType = document.getElementById("audType");
+    const audReason = document.getElementById("audReason");
+    const audRefreshBtn = document.getElementById("audRefreshBtn");
+    const audExportBtn = document.getElementById("audExportBtn");
+    const audHint = document.getElementById("audHint");
+    const audBody = document.getElementById("audBody");
+    const audMsg = document.getElementById("audMsg");
 
     function setMsg(el, text, kind){
       el.textContent = text || "";
@@ -162,9 +232,7 @@
     function tsToText(v){
       if(!v) return "";
       try{
-        if(typeof v.toDate === "function"){
-          return v.toDate().toLocaleString();
-        }
+        if(typeof v.toDate === "function") return v.toDate().toLocaleString();
         const d = new Date(v);
         if(!isNaN(d.getTime())) return d.toLocaleString();
         return String(v);
@@ -173,18 +241,22 @@
       }
     }
 
-    function withTimeout(promise, ms, label){
-      let t;
-      const timeout = new Promise((_, rej)=>{
-        t = setTimeout(()=> rej(new Error(`timeout:${label || "op"}`)), ms);
-      });
-      return Promise.race([promise, timeout]).finally(()=> clearTimeout(t));
+    function dateToRangeTS(dateStr, endOfDay=false){
+      if(!dateStr) return null;
+      const d = new Date(dateStr + "T00:00:00");
+      if(endOfDay){
+        d.setHours(23,59,59,999);
+      }
+      return Timestamp.fromDate(d);
     }
 
     logoutBtn.addEventListener("click", async ()=>{
       await logout();
       window.location.replace("./login.html");
     });
+
+    const session = await requireRole("admin");
+    who.textContent = session.user.email || session.user.uid;
 
     // ========= Users List =========
     let cachedUsers = [];
@@ -195,7 +267,7 @@
       setMsg(listMsg, "", "");
 
       try{
-        const snap = await withTimeout(getDocs(collection(db, "users")), 12000, "users");
+        const snap = await getDocs(collection(db, "users"));
         const rows = [];
         snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
 
@@ -205,6 +277,7 @@
         if(rows.length === 0){
           listHint.textContent = "لا يوجد موظفين داخل users collection.";
           fillEmployeeFilter([]);
+          fillAuditEmployeeFilter([]);
           return;
         }
 
@@ -221,29 +294,46 @@
         `).join("");
 
         fillEmployeeFilter(rows);
+        fillAuditEmployeeFilter(rows);
 
       }catch(e){
         console.error(e);
         listHint.textContent = "";
         setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
         fillEmployeeFilter([]);
+        fillAuditEmployeeFilter([]);
       }
     }
 
     function fillEmployeeFilter(users){
       const prev = repEmployee.value || "all";
-
       const opts = [
         `<option value="all">All employees | كل الموظفين</option>`,
         ...users
           .filter(u => (u.role || "employee") !== "admin")
           .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
       ];
-
       repEmployee.innerHTML = opts.join("");
-
       const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
       repEmployee.value = stillExists ? prev : "all";
+    }
+
+    function fillAuditEmployeeFilter(users){
+      const prev = audEmployee.value || "all";
+      const opts = [
+        `<option value="all">All employees | كل الموظفين</option>`,
+        ...users
+          .filter(u => (u.role || "employee") !== "admin")
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
+      ];
+      audEmployee.innerHTML = opts.join("");
+      const stillExists = Array.from(audEmployee.options).some(o => o.value === prev);
+      audEmployee.value = stillExists ? prev : "all";
+    }
+
+    function uidToName(uid){
+      const u = cachedUsers.find(x => x.id === uid);
+      return u?.name || uid || "-";
     }
 
     saveBtn.addEventListener("click", async ()=>{
@@ -292,31 +382,24 @@
 
     async function loadAttendance(){
       repHint.textContent = "Loading...";
-      repSummary.textContent = "";
       repBody.innerHTML = "";
       setMsg(repMsg, "", "");
 
       try{
-        const snap = await withTimeout(
-          getDocs(collection(db, "attendance")),
-          12000,
-          "attendance"
-        );
-
+        const snap = await getDocs(collection(db, "attendance"));
         const rows = [];
         snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
 
-        // ترتيب بالأحدث + عرض آخر 300 فقط لتحسين أداء الواجهة
         rows.sort((a,b)=>{
-          const at = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : (a.checkInAt ? new Date(a.checkInAt).getTime() : 0);
-          const bt = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : (b.checkInAt ? new Date(b.checkInAt).getTime() : 0);
-          return bt - at;
+          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt || a.dateKey || 0).getTime();
+          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt || b.dateKey || 0).getTime();
+          return bd - ad;
         });
 
-        cachedAttendance = rows.slice(0, 300);
+        cachedAttendance = rows;
         renderAttendance();
 
-        if(cachedAttendance.length === 0){
+        if(rows.length === 0){
           repHint.textContent = "لا توجد سجلات attendance حالياً.";
         }else{
           repHint.textContent = "";
@@ -324,16 +407,8 @@
 
       }catch(e){
         console.error("Attendance load error:", e);
-
         repHint.textContent = "";
-        repSummary.textContent = "";
-
-        if(String(e?.message || "").includes("timeout")){
-          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة اتصال أو Rules تمنع القراءة.", "err");
-        }else{
-          setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
-        }
-
+        setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
         repBody.innerHTML = "";
         lastRenderedRows = [];
       }
@@ -343,12 +418,8 @@
       const emp = repEmployee.value;
       const st = repState.value;
 
-      const from = (repFrom?.value || "").trim();
-      const to = (repTo?.value || "").trim();
-
       let rows = cachedAttendance.slice();
 
-      // فلتر الموظف
       if(emp !== "all"){
         rows = rows.filter(r =>
           (r.uid === emp) ||
@@ -358,46 +429,17 @@
         );
       }
 
-      // فلتر الحالة
       if(st === "in"){
         rows = rows.filter(r => !!r.checkInAt && !r.checkOutAt);
       }else if(st === "out"){
         rows = rows.filter(r => !!r.checkInAt && !!r.checkOutAt);
       }
 
-      // فلتر التاريخ (يعتمد على dateKey إذا موجود، وإلا نشتقه من checkInAt)
-      if(from || to){
-        rows = rows.filter(r => {
-          let dk = r.dateKey;
-          if(!dk){
-            const d = r.checkInAt?.toDate ? r.checkInAt.toDate() : (r.checkInAt ? new Date(r.checkInAt) : null);
-            if(d && !isNaN(d.getTime())){
-              dk = d.toISOString().slice(0,10);
-            }else{
-              dk = "";
-            }
-          }
-          if(from && dk && dk < from) return false;
-          if(to && dk && dk > to) return false;
-          return true;
-        });
-      }
-
       lastRenderedRows = rows;
-
-      // ملخص سريع
-      const total = rows.length;
-      const inCount = rows.filter(r => !!r.checkInAt && !r.checkOutAt).length;
-      const outCount = rows.filter(r => !!r.checkInAt && !!r.checkOutAt).length;
-      const lateCount = rows.filter(r => (Number(r.lateMinutes || 0) > 0)).length;
-
-      repSummary.textContent = total
-        ? `Total: ${total} | In: ${inCount} | Out: ${outCount} | Late: ${lateCount}`
-        : "";
 
       repBody.innerHTML = rows.map(r=>{
         const name = r.name || r.employeeName || "-";
-        const uid  = r.uid || r.employeeUid || r.userId || "-";
+        const uid = r.uid || r.userId || r.employeeUid || "-";
         const shift = r.shift || "-";
         const status = r.status || "-";
         const late = (r.lateMinutes ?? "-");
@@ -405,7 +447,7 @@
 
         return `
           <tr>
-            <td>${escapeHtml(r.dateKey || "")}</td>
+            <td>${escapeHtml(r.dateKey || "-")}</td>
             <td>${escapeHtml(name)}</td>
             <td style="font-family:monospace">${escapeHtml(uid)}</td>
             <td>${escapeHtml(shift)}</td>
@@ -418,12 +460,7 @@
         `;
       }).join("");
 
-      if(rows.length === 0){
-        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
-        repSummary.textContent = "";
-      }else{
-        repHint.textContent = "";
-      }
+      repHint.textContent = rows.length ? "" : "لا توجد نتائج مطابقة للفلاتر.";
     }
 
     function exportCSV(){
@@ -433,12 +470,8 @@
       }
       setMsg(repMsg, "", "");
 
-      const headers = [
-        "dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"
-      ];
-
-      const lines = [];
-      lines.push(headers.join(","));
+      const headers = ["dateKey","name","uid","shift","status","checkInAt","checkOutAt","lateMinutes","distanceM"];
+      const lines = [headers.join(",")];
 
       for(const r of lastRenderedRows){
         const name = r.name || r.employeeName || "";
@@ -460,7 +493,7 @@
         lines.push(row.join(","));
       }
 
-      const csv = "\uFEFF" + lines.join("\n"); // BOM للعربي
+      const csv = "\uFEFF" + lines.join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
 
@@ -477,32 +510,148 @@
 
     repEmployee.addEventListener("change", renderAttendance);
     repState.addEventListener("change", renderAttendance);
-    repFrom.addEventListener("change", renderAttendance);
-    repTo.addEventListener("change", renderAttendance);
     repRefreshBtn.addEventListener("click", loadAttendance);
     repExportBtn.addEventListener("click", exportCSV);
 
-    async function start(){
-      // 1) تحقق من صلاحية الأدمن
-      try{
-        const session = await requireRole("admin");
-        who.textContent = session.user.email || session.user.uid;
-      }catch(e){
-        console.error("requireRole error:", e);
-        who.textContent = "Auth error";
-        listHint.textContent = "";
-        repHint.textContent = "";
-        setMsg(listMsg, "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
-        setMsg(repMsg,  "تعذر التحقق من صلاحية الأدمن (Auth/Rules/Config).", "err");
-        return;
-      }
+    // ========= Audit Logs =========
+    let cachedAudit = [];
+    let lastAuditRows = [];
 
-      // 2) تحميل البيانات
-      await loadUsers();
-      await loadAttendance();
+    async function loadAudit(){
+      audHint.textContent = "Loading...";
+      audBody.innerHTML = "";
+      setMsg(audMsg, "", "");
+
+      try{
+        const fromTS = dateToRangeTS(audFrom.value, false);
+        const toTS = dateToRangeTS(audTo.value, true);
+
+        // Keep server query simple to avoid indexes:
+        // filter by date range only, other filters are client-side.
+        const constraints = [];
+        if(fromTS) constraints.push(where("createdAt", ">=", fromTS));
+        if(toTS) constraints.push(where("createdAt", "<=", toTS));
+        constraints.push(orderBy("createdAt", "desc"));
+        constraints.push(limit(500));
+
+        const q = query(collection(db, "audit_logs"), ...constraints);
+        const snap = await getDocs(q);
+
+        const rows = [];
+        snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+
+        cachedAudit = rows;
+        renderAudit();
+
+        audHint.textContent = rows.length ? "" : "لا توجد سجلات ضمن هذا النطاق.";
+
+      }catch(e){
+        console.error("Audit load error:", e);
+        audHint.textContent = "";
+        setMsg(audMsg, "مشكلة بقراءة audit_logs. راجع Rules (read للأدمن) أو الاسم audit_logs.", "err");
+        audBody.innerHTML = "";
+        lastAuditRows = [];
+      }
     }
 
-    start();
+    function renderAudit(){
+      const emp = audEmployee.value;
+      const type = audType.value;
+      const reason = audReason.value;
+
+      let rows = cachedAudit.slice();
+
+      if(emp !== "all"){
+        rows = rows.filter(r => (r.uid === emp));
+      }
+      if(type !== "all"){
+        rows = rows.filter(r => (r.eventType || "") === type);
+      }
+      if(reason !== "all"){
+        rows = rows.filter(r => (r.reason || "") === reason);
+      }
+
+      lastAuditRows = rows;
+
+      audBody.innerHTML = rows.map(r=>{
+        const time = tsToText(r.createdAt);
+        const uid = r.uid || "-";
+        const name = uidToName(uid);
+        const ev = r.eventType || "-";
+        const rs = r.reason || "-";
+        const deviceId = r.deviceId || "-";
+        const dist = (r.distanceM ?? "-");
+        const acc = (r.accuracyM ?? "-");
+
+        return `
+          <tr>
+            <td>${escapeHtml(time)}</td>
+            <td>${escapeHtml(name)}</td>
+            <td style="font-family:monospace">${escapeHtml(uid)}</td>
+            <td>${escapeHtml(ev)}</td>
+            <td>${escapeHtml(rs)}</td>
+            <td style="font-family:monospace">${escapeHtml(deviceId)}</td>
+            <td>${escapeHtml(dist)}</td>
+            <td>${escapeHtml(acc)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      audHint.textContent = rows.length ? "" : "لا توجد نتائج مطابقة للفلاتر.";
+    }
+
+    function exportAuditCSV(){
+      if(!lastAuditRows || lastAuditRows.length === 0){
+        setMsg(audMsg, "ماكو بيانات لتصديرها حسب الفلاتر الحالية.", "err");
+        return;
+      }
+      setMsg(audMsg, "", "");
+
+      const headers = ["createdAt","name","uid","eventType","reason","deviceId","distanceM","accuracyM","email"];
+      const lines = [headers.join(",")];
+
+      for(const r of lastAuditRows){
+        const uid = r.uid || "";
+        const row = [
+          tsToText(r.createdAt),
+          uidToName(uid),
+          uid,
+          r.eventType || "",
+          r.reason || "",
+          r.deviceId || "",
+          (r.distanceM ?? ""),
+          (r.accuracyM ?? ""),
+          (r.email || "")
+        ].map(v => `"${String(v ?? "").replace(/"/g, '""')}"`);
+
+        lines.push(row.join(","));
+      }
+
+      const csv = "\uFEFF" + lines.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit_logs_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      setMsg(audMsg, "تم تصدير CSV ✅", "ok");
+    }
+
+    audEmployee.addEventListener("change", renderAudit);
+    audType.addEventListener("change", renderAudit);
+    audReason.addEventListener("change", renderAudit);
+    audRefreshBtn.addEventListener("click", loadAudit);
+    audExportBtn.addEventListener("click", exportAuditCSV);
+
+    // Start
+    await loadUsers();
+    await loadAttendance();
+    await loadAudit();
   </script>
 </body>
 </html>
