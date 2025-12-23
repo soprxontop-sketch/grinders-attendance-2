@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Employee - The Grinders</title>
+
+  <!-- your css -->
+  <link rel="stylesheet" href="./assets/css/cafe-theme.css">
+
+  <style>
+    :root{
+      --bg1:#0b1220;
+      --bg2:#151b2b;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.09);
+      --stroke:rgba(255,255,255,.10);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.70);
+      --good:#22c55e;
+      --bad:#ef4444;
+      --warn:#f59e0b;
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% 10%, rgba(245,158,11,.18), transparent 55%),
+        radial-gradient(900px 600px at 85% 15%, rgba(34,197,94,.12), transparent 55%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px 16px;
+    }
+    .wrap{
+      width:min(980px, 100%);
+    }
+    .header{
+      text-align:center;
+      margin-bottom:18px;
+    }
+    .header h1{
+      margin:0;
+      font-size:34px;
+      letter-spacing:.4px;
+    }
+    .header p{
+      margin:6px 0 0;
+      color:var(--muted);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:16px;
+    }
+
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:14px;
+    }
+
+    .tile{
+      background:linear-gradient(180deg, var(--card2), var(--card));
+      border:1px solid var(--stroke);
+      border-radius:16px;
+      padding:14px 14px 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+      backdrop-filter: blur(10px);
+    }
+    .label{
+      font-size:12px;
+      color:var(--muted);
+      letter-spacing:.2px;
+      margin-bottom:6px;
+    }
+    .value{
+      font-size:16px;
+      font-weight:650;
+      min-height:22px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,.06);
+      color:var(--muted);
+      font-size:13px;
+    }
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.good{background:var(--good)}
+    .dot.bad{background:var(--bad)}
+    .dot.warn{background:var(--warn)}
+
+    .actionCard{
+      width:min(520px, 100%);
+      margin: 0 auto;
+      padding:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border:1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      text-align:center;
+    }
+    .statusText{
+      margin:0 0 12px;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    .btnRow{
+      display:flex;
+      gap:12px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+    button{
+      appearance:none;
+      border:0;
+      border-radius:14px;
+      padding:12px 18px;
+      min-width:160px;
+      font-weight:750;
+      cursor:pointer;
+      transition: transform .06s ease, opacity .2s ease;
+    }
+    button:active{transform: scale(.98)}
+    button:disabled{opacity:.55; cursor:not-allowed}
+    .btnIn{background: linear-gradient(180deg, rgba(34,197,94,.95), rgba(34,197,94,.78)); color:#06210f}
+    .btnOut{background: linear-gradient(180deg, rgba(239,68,68,.95), rgba(239,68,68,.78)); color:#240606}
+    .btnLogout{
+      background: transparent;
+      border:1px solid var(--stroke);
+      color:var(--muted);
+      min-width:120px;
+    }
+
+    .hint{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.4;
+    }
+
+    @media (max-width: 720px){
+      .stats{grid-template-columns: 1fr;}
+      button{min-width: 100%;}
+      .
+
+actionCard{padding:16px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1>Employee</h1>
+      <p>The Grinders — Attendance System</p>
+    </div>
+
+    <div class="grid">
+      <div class="stats">
+        <div class="tile">
+          <div class="label">Current Shift</div>
+          <div class="value" id="shiftVal">—</div>
+        </div>
+
+        <div class="tile">
+          <div class="label">Attendance Status</div>
+          <div class="value" id="attVal">—</div>
+        </div>
+
+        <div class="tile">
+          <div class="label">GPS Distance (m)</div>
+          <div class="value" id="distVal">—</div>
+        </div>
+
+        <div class="tile">
+          <div class="label">GPS Accuracy (m)</div>
+          <div class="value" id="accVal">—</div>
+        </div>
+
+        <div class="tile">
+          <div class="label">Your Lat / Lng</div>
+          <div class="value" id="youVal">—</div>
+        </div>
+
+        <div class="tile">
+          <div class="label">Cafe Lat / Lng</div>
+          <div class="value" id="cafeVal">33.4430208, 44.3973632</div>
+        </div>
+      </div>
+
+      <div class="actionCard">
+        <p class="statusText" id="statusText">Loading status…</p>
+
+        <div class="btnRow">
+          <button class="btnIn" id="checkInBtn" disabled>Check In</button>
+          <button class="btnOut" id="checkOutBtn" disabled>Check Out</button>
+          <button class="btnLogout" id="logoutBtn">Logout</button>
+        </div>
+
+        <div class="hint" id="hintText">
+          GPS check: within <b>100m</b> from the cafe (or your radius setting).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORTANT: module script -->
+  <script type="module" src="./js/employee.js"></script>
+</body>
+</html>
+
