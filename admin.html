@@ -1,4 +1,3 @@
-> Coding:
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -7,8 +6,7 @@
   <title>The Grinders | Admin</title>
   <link rel="stylesheet" href="./assets/css/cafe-theme.css">
 </head>
-
-<body class="page-admin">
+<body>
   <header>
     <div>
       <div style="font-weight:800">Admin Panel</div>
@@ -18,45 +16,7 @@
   </header>
 
   <div class="wrap">
-
-    <!-- ✅ (ADD ONLY) Reports Card -->
-    <div class="card" id="reportsCard">
-      <h2>التقارير</h2>
-      <div class="muted">اختيار فترة و تصدير CSV (Summary / Details)</div>
-
-      <div class="row" style="margin-top:10px">
-        <input id="repFrom" type="date" />
-        <input id="repTo" type="date" />
-        <button class="btn" id="repLoadBtn">عرض التقرير</button>
-      </div>
-
-      <div class="row" style="margin-top:10px">
-        <button class="btn" id="repCsvSummaryBtn">CSV Summary</button>
-        <button class="btn" id="repCsvDetailsBtn">CSV Details</button>
-        <div class="muted" id="repHint">يعتمد على collection اسمها <b>attendance</b></div>
-      </div>
-
-      <div id="repMsg" class="msg"></div>
-
-      <div style="overflow:auto; margin-top:10px">
-        <table>
-          <thead>
-            <tr>
-              <th>الموظف</th>
-              <th>UID</th>
-              <th>التاريخ</th>
-              <th>Check In</th>
-              <th>Check Out</th>
-              <th>المدة (دقائق)</th>
-              <th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody id="repTbody"></tbody>
-        </table>
-      </div>
-    </div>
-    <!-- ✅ End Reports Card -->
-
+    <!-- ===== Existing: Add/Update user ===== -->
     <div class="card">
       <h2>إضافة/تحديث موظف (يدوي)</h2>
       <div class="muted">مهم: UID لازم يكون من Firebase Auth (Users)</div>
@@ -82,11 +42,11 @@
       <div id="saveMsg" class="msg"></div>
     </div>
 
+    <!-- ===== Existing: Users table ===== -->
     <div class="card">
       <h2>الموظفون</h2>
       <div class="muted" id="listHint">Loading...</div>
-
-      <div style="overflow:auto; margin-top:10px">
+      <div style="overflow:auto">
         <table>
           <thead>
             <tr>
@@ -100,12 +60,53 @@
           <tbody id="tbody"></tbody>
         </table>
       </div>
-
       <div id="listMsg" class="msg"></div>
+    </div>
+
+    <!-- ===== NEW: Attendance Report (NO STYLE CHANGE) ===== -->
+    <div class="card">
+      <h2>التقارير | Reports</h2>
+      <div class="muted">فلترة حسب الموظف وحالة الحضور (Checked In / Checked Out)</div>
+
+      <div class="row" style="margin-top:10px">
+        <select id="repEmployee">
+          <option value="all">كل الموظفين | All employees</option>
+        </select>
+
+        <select id="repState">
+          <option value="all">كل الحالات | All</option>
+          <option value="in">Checked In</option>
+          <option value="out">Checked Out</option>
+        </select>
+
+        <button class="btn" id="repRefreshBtn">تحديث | Refresh</button>
+      </div>
+
+      <div class="muted" id="repHint" style="margin-top:10px">Loading...</div>
+
+      <div style="overflow:auto; margin-top:10px">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ | Date</th>
+              <th>الاسم | Name</th>
+              <th>UID</th>
+              <th>Shift</th>
+              <th>Status</th>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Late (min)</th>
+              <th>Distance (m)</th>
+            </tr>
+          </thead>
+          <tbody id="repBody"></tbody>
+        </table>
+      </div>
+
+      <div id="repMsg" class="msg"></div>
     </div>
   </div>
 
-  <!-- ========== YOUR ORIGINAL ADMIN SCRIPT (UNCHANGED) ========== -->
   <script type="module">
     import { requireRole } from "./js/auth-guard.js";
     import { logout } from "./js/auth.js";
@@ -128,14 +129,48 @@
 
     const tbody = document.getElementById("tbody");
     const listHint = document.getElementById("listHint");
-    const listMsg = document.getElementById("listMsg");
+
+const listMsg = document.getElementById("listMsg");
+
+    // ===== NEW: Report elements =====
+    const repEmployee = document.getElementById("repEmployee");
+    const repState = document.getElementById("repState");
+    const repRefreshBtn = document.getElementById("repRefreshBtn");
+    const repHint = document.getElementById("repHint");
+    const repBody = document.getElementById("repBody");
+    const repMsg = document.getElementById("repMsg");
 
     function setMsg(el, text, kind){
-      el.
-
-> Coding:
-textContent = text || "";
+      el.textContent = text || "";
       el.className = "msg" + (kind ? (" " + kind) : "");
+    }
+
+    function escapeHtml(s){
+      return String(s ?? "").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function tsToText(v){
+      if(!v) return "-";
+      try{
+        // Firestore Timestamp
+        if(typeof v.toDate === "function"){
+          return v.toDate().toLocaleString();
+        }
+        // ISO string or Date
+        const d = (v instanceof Date) ? v : new Date(v);
+        if(isNaN(d.getTime())) return String(v);
+        return d.toLocaleString();
+      }catch{
+        return String(v);
+      }
+    }
+
+    function getAttendanceState(rec){
+      const hasIn = !!rec.checkInAt;
+      const hasOut = !!rec.checkOutAt;
+      if(hasIn && !hasOut) return "in";
+      if(hasIn && hasOut) return "out";
+      return "all";
     }
 
     logoutBtn.addEventListener("click", async ()=>{
@@ -146,6 +181,8 @@ textContent = text || "";
     const session = await requireRole("admin");
     who.textContent = session.user.email || session.user.uid;
 
+    // ===== Existing: Load users =====
+    let cachedUsers = [];
     async function loadUsers(){
       listHint.textContent = "Loading...";
       tbody.innerHTML = "";
@@ -154,24 +191,33 @@ textContent = text || "";
         const snap = await getDocs(collection(db, "users"));
         const rows = [];
         snap.forEach(docu => rows.push({ id: docu.id, ...docu.data() }));
-
         rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+
+        cachedUsers = rows;
 
         if(rows.length === 0){
           listHint.textContent = "لا يوجد موظفين داخل users collection.";
-          return;
+        }else{
+          listHint.textContent = "";
+          tbody.innerHTML = rows.map(u => `
+            <tr>
+              <td>${escapeHtml(u.name || "-")}</td>
+              <td>${escapeHtml((u.role || "employee"))}</td>
+              <td>${u.active === false ? "غير فعال" : "فعال"}</td>
+              <td style="font-family:monospace">${escapeHtml(u.id)}</td>
+              <td>${escapeHtml(u.email || "-")}</td>
+            </tr>
+          `).join("");
         }
-        listHint.textContent = "";
 
-        tbody.innerHTML = rows.map(u => `
-          <tr>
-            <td>${escapeHtml(u.name || "-")}</td>
-            <td>${escapeHtml((u.role || "employee"))}</td>
-            <td>${u.active === false ? "غير فعال" : "فعال"}</td>
-            <td style="font-family:monospace">${escapeHtml(u.id)}</td>
-            <td>${escapeHtml(u.email || "-")}</td>
-          </tr>
-        `).join("");
+        // ===== NEW: Fill employee filter from users (no design change) =====
+        const currentVal = repEmployee.value || "all";
+        repEmployee.innerHTML = <option value="all">كل الموظفين | All employees</option> + rows
+          .filter(u => (u.role || "employee") !== "admin") // optional: show employees only
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
+          .join("");
+        repEmployee.value = [...repEmployee.options].some(o=>o.value===currentVal) ? currentVal : "all";
+
       }catch(e){
         console.error(e);
         listHint.textContent = "";
@@ -179,10 +225,7 @@ textContent = text || "";
       }
     }
 
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
-
+    // ===== Existing: Save user =====
     saveBtn.addEventListener("click", async ()=>{
       setMsg(saveMsg,"","");
       const uid = uidEl.value.trim();
@@ -198,17 +241,14 @@ textContent = text || "";
 
       try{
         const ref = doc(db, "users", uid);
-        const base = {
-          name,
-          role,
-          active,
-          updatedAt: serverTimestamp(),
-        };
+        const base = { name, role, active, updatedAt: serverTimestamp() };
         if(deviceId) base.deviceId = deviceId;
 
         const snap = await getDoc(ref);
         if(!snap.exists()){
-          await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
+          await setDoc(ref, { ...
+
+base, createdAt: serverTimestamp() }, { merge: true });
         }else{
           await updateDoc(ref, base);
         }
@@ -221,167 +261,92 @@ textContent = text || "";
       }
     });
 
-    await loadUsers();
-  </script>
+    // ===== NEW: Attendance report =====
+    let cachedAttendance = [];
 
-  <!-- ========== REPORTS SCRIPT (ADD ONLY) ========== -->
-  <script type="module">
-    import { requireRole } from "./js/auth-guard.js";
-    import { db, collection, getDocs, query, where, orderBy } from "./js/firebase.js";
+    async function loadAttendance(){
+      repHint.textContent = "Loading...";
+      repBody.innerHTML = "";
+      setMsg(repMsg, "", "");
 
-    const ATT_COLLECTION = "attendance"; // غيّرها فقط إذا اسمها عندك مختلف
-
-    const repFrom = document.getElementById("repFrom");
-    const repTo = document.getElementById("repTo");
-    const repLoadBtn = document.getElementById("repLoadBtn");
-    const repCsvSummaryBtn = document.getElementById("repCsvSummaryBtn");
-    const repCsvDetailsBtn = document.getElementById("repCsvDetailsBtn");
-    const repMsg = document.getElementById("repMsg");
-    const repTbody = document.getElementById("repTbody");
-
-    function setRepMsg(text, kind){
-      repMsg.textContent = text || "";
-      repMsg.className = "msg" + (kind ? (" " + kind) : "");
-    }
-
-    function toISODate(d){
-      const pad = (n)=> String(n).padStart(2,"0");
-      return ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())};
-    }
-
-    (function initDates(){
-      const now = new Date();
-      const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      const to = new Date(now.getFullYear(), now.getMonth()+1, 0);
-      repFrom.value = toISODate(from);
-      repTo.value = toISODate(to);
-    })();
-
-    function downloadCSV(filename, rows){
-      const esc = (v)=>{
-        const s = (v ?? "").toString();
-        if (/[",\n]/.
-
-> Coding:
-test(s)) return "${s.replace(/"/g,'""')}";
-        return s;
-      };
-      const csv = rows.map(r => r.map(esc).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    function parseDateInput(val){
-      if(!val) return null;
-      const d = new Date(val + "T00:00:00");
-      return isNaN(d.getTime()) ? null : d;
-    }
-
-    function minutesBetween(a, b){
-      if(!a || !b) return 0;
-      return Math.round((b - a) / 60000);
-    }
-
-    function fmtTime(ts){
-      if(!ts) return "-";
-      const d = ts.toDate ? ts.toDate() : new Date(ts);
-      return d.toLocaleString("ar-IQ");
-    }
-
-    function fmtDate(ts){
-      if(!ts) return "-";
-      const d = ts.toDate ? ts.toDate() : new Date(ts);
-      return d.toLocaleDateString("ar-IQ");
-    }
-
-    function escapeHtml(s){
-      return String(s ?? "").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
-
-    function normalize(d){
-      const data = d.data();
-      return {
-        uid: data.uid⠵⠟⠟⠟⠺⠟⠞⠟⠞⠟⠟⠟⠟⠞⠞data.employeeUid || "-",
-        name: data.name⠺⠞⠞⠵⠟⠞⠟⠟⠟⠟⠞⠵⠺⠞⠞⠟⠞⠺⠞⠺⠞"-",
-        status: data.status || (data.checkOutAt ? "checked_out" : "checked_in"),
-        checkInAt: data.checkInAt || null,
-        checkOutAt: data.checkOutAt || null,
-      };
-    }
-
-    async function fetchAttendance(fromDate, toDate){
-      await requireRole("admin");
-
-      const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0,0,0);
-      const to = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23,59,59);
-
-      let qy;
       try{
-        qy = query(
-          collection(db, ATT_COLLECTION),
-          where("checkInAt", ">=", from),
-          where("checkInAt", "<=", to),
-          orderBy("checkInAt", "desc")
-        );
+        const snap = await getDocs(collection(db, "attendance")); // <-- اسم الكولكشن حسب صورك
+        const rows = [];
+        snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+
+        // ترتيب أحدث أول (حسب checkInAt أو dateKey)
+        rows.sort((a,b)=>{
+          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt0).getTime();
+          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt0).getTime();
+          return bd - ad;
+        });
+
+        cachedAttendance = rows;
+        repHint.textContent = rows.length ? "" : "لا توجد سجلات attendance حالياً.";
+        renderAttendance();
+
       }catch(e){
-        // fallback (no index / different field): load all
-        qy = collection(db, ATT_COLLECTION);
+        console.error(e);
+        repHint.textContent = "";
+        setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
       }
-
-      const snap = await getDocs(qy);
-      const items = [];
-      snap.forEach(d => items.push(normalize(d)));
-
-      // client-side filter if needed
-      const filtered = items.filter(it=>{
-        const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
-        if(!ci) return false;
-        return ci >= from && ci <= to;
-      });
-
-      filtered.sort((a,b)=>{
-        const ad = a.checkInAt?.toDate ? a.checkInAt.toDate() : new Date(a.checkInAt);
-        const bd = b.checkInAt?.toDate ? b.checkInAt.toDate() : new Date(b.checkInAt);
-        return bd - ad;
-      });
-
-      return filtered;
     }
 
-    function render(items){
-      if(!items.length){
-        repTbody.innerHTML = <tr><td colspan="7" class="muted">لا يوجد بيانات ضمن الفترة المختارة.</td></tr>;
-        return;
+    function renderAttendance(){
+      const emp = repEmployee.value;
+      const st = repState.value;
+
+      let rows = cachedAttendance.slice();
+
+      // فلتر موظف (يحاول uid أولاً، ثم name إذا ما موجود uid)
+      if(emp !== "all"){
+        rows = rows.filter(r => (r.uid === emp)(r.employeeUid === emp) || (r.id === emp));
       }
 
-      repTbody.innerHTML = items.map(it=>{
-        const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
-        const co = it.checkOutAt?.toDate ? it.checkOutAt.toDate() : (it.checkOutAt ? new Date(it.checkOutAt) : null);
-        const mins = minutesBetween(ci, co);
+      // فلتر حالة
+      if(st === "in"){
+        rows = rows.filter(r => getAttendanceState(r) === "in");
+      }else if(st === "out"){
+        rows = rows.filter(r => getAttendanceState(r) === "out");
+      }
 
+      repBody.innerHTML = rows.map(r=>{
+        const name = r.name"-";
+        const uid = r.uidr.employeeUid || "-";
+        const shift = r.shift || "-";
+        const status = r.status || "-";
+        const late = (r.lateMinutes ?? "-");
+        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
         return `
           <tr>
-            <td>${escapeHtml(it.name)}</td>
-            <td style="font-family:monospace">${escapeHtml(it.uid)}</td>
-            <td>${escapeHtml(fmtDate(it.checkInAt))}</td>
-            <td>${escapeHtml(fmtTime(it.checkInAt))}</td>
-            <td>${escapeHtml(fmtTime(it.checkOutAt))}</td>
-            <td>${mins ? mins : "-"}</td>
-            <td>${escapeHtml(it.status)}</td>
+            <td>${escapeHtml(r.dateKey || "-")}</td>
+            <td>${escapeHtml(name)}</td>
+            <td style="font-family:monospace">${escapeHtml(uid)}</td>
+            <td>${escapeHtml(shift)}</td>
+            <td>${escapeHtml(status)}</td>
+            <td>${escapeHtml(tsToText(r.checkInAt))}</td>
+            <td>${escapeHtml(tsToText(r.checkOutAt))}</td>
+            <td>${escapeHtml(late)}</td>
+            <td>${escapeHtml(dist)}</td>
           </tr>
         `;
       }).join("");
+
+      if(rows.length === 0){
+        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
+      }else{
+        repHint.textContent = "";
+      }
     }
 
-    function buildSummary(items){
-      const map = new Map(); // uid|day
-      for(const it of items){
-        const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
-        const co = it.checkOutAt?.
+    repEmployee.addEventListener("change", renderAttendance);
+    repState.addEventListener("change", renderAttendance);
+    repRefreshBtn.addEventListener("click", loadAttendance);
+
+    // ===== Boot =====
+    await loadUsers();
+    await loadAttendance();
+  </script>
+</body>
+</html>
+
