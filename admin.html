@@ -419,7 +419,7 @@ const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = attendance_report_${new Date().toISOString().slice(0,10)}.csv;
+      a.download = `attendance_report_${new Date().toISOString().slice(0,10)}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
