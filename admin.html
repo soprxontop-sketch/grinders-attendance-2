@@ -120,6 +120,7 @@
       collection, getDocs
     } from "./js/firebase.js";
 
+    // ===== DOM =====
     const who = document.getElementById("who");
     const logoutBtn = document.getElementById("logoutBtn");
 
@@ -132,10 +133,11 @@
     const saveMsg = document.getElementById("saveMsg");
 
     const tbody = document.getElementById("tbody");
-    const listHint = document.getElementById("listHint");
+    const listHint = document.
 
 > Coding:
-const listMsg = document.getElementById("listMsg");
+getElementById("listHint");
+    const listMsg = document.getElementById("listMsg");
 
     // Reports UI
     const repEmployee = document.getElementById("repEmployee");
@@ -146,6 +148,7 @@ const listMsg = document.getElementById("listMsg");
     const repBody = document.getElementById("repBody");
     const repMsg = document.getElementById("repMsg");
 
+    // ===== Helpers =====
     function setMsg(el, text, kind){
       el.textContent = text || "";
       el.className = "msg" + (kind ? (" " + kind) : "");
@@ -158,11 +161,7 @@ const listMsg = document.getElementById("listMsg");
     function tsToText(v){
       if(!v) return "";
       try{
-        // Firestore Timestamp
-        if(typeof v.toDate === "function"){
-          return v.toDate().toLocaleString();
-        }
-        // ISO string or Date-like
+        if(typeof v.toDate === "function") return v.toDate().toLocaleString();
         const d = new Date(v);
         if(!isNaN(d.getTime())) return d.toLocaleString();
         return String(v);
@@ -171,17 +170,18 @@ const listMsg = document.getElementById("listMsg");
       }
     }
 
+    // ===== Logout =====
     logoutBtn.addEventListener("click", async ()=>{
       await logout();
       window.location.replace("./login.html");
     });
 
-    const session = await requireRole("admin");
-    who.textContent = session.user.email || session.user.uid;
-
-    // ========= Users List =========
+    // ===== State =====
     let cachedUsers = [];
+    let cachedAttendance = [];
+    let lastRenderedRows = [];
 
+    // ===== Users =====
     async function loadUsers(){
       listHint.textContent = "Loading...";
       tbody.innerHTML = "";
@@ -197,7 +197,6 @@ const listMsg = document.getElementById("listMsg");
 
         if(rows.length === 0){
           listHint.textContent = "لا يوجد موظفين داخل users collection.";
-          // حتى لو ماكو موظفين، خلي فلتر الموظفين يبقى All
           fillEmployeeFilter([]);
           return;
         }
@@ -217,7 +216,7 @@ const listMsg = document.getElementById("listMsg");
         fillEmployeeFilter(rows);
 
       }catch(e){
-        console.error(e);
+        console.error("Users load error:", e);
         listHint.textContent = "";
         setMsg(listMsg, "مشكلة بقراءة Firestore. راجع Rules أو الصلاحيات.", "err");
         fillEmployeeFilter([]);
@@ -225,18 +224,17 @@ const listMsg = document.getElementById("listMsg");
     }
 
     function fillEmployeeFilter(users){
-      // لا نخرب اختيار المستخدم إذا كان مختار شي
       const prev = repEmployee.value || "all";
 
       const opts = [
         <option value="all">All employees | كل الموظفين</option>,
         ...users
-          .filter(u => (u.role || "employee") !== "admin") // اختياري: إخفاء الأدمن من الفلتر
+          .filter(u => (u.role || "employee") !== "admin")
           .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name || u.id)}</option>`)
       ];
 
       repEmployee.innerHTML = opts.join("");
-      // رجّع الاختيار السابق إذا موجود
+
       const stillExists = Array.from(repEmployee.options).some(o => o.value === prev);
       repEmployee.value = stillExists ? prev : "all";
     }
@@ -265,15 +263,15 @@ const listMsg = document.getElementById("listMsg");
         };
         if(deviceId) base.deviceId = deviceId;
 
-> Coding:
-const snap = await getDoc(ref);
+        const snap = await getDoc(ref);
         if(!snap.exists()){
           await setDoc(ref, { ...base, createdAt: serverTimestamp() }, { merge: true });
         }else{
           await updateDoc(ref, base);
         }
 
-        setMsg(saveMsg,"تم الحفظ ✅", "ok");
+> Coding:
+setMsg(saveMsg,"تم الحفظ ✅", "ok");
         await loadUsers();
 
       }catch(e){
@@ -282,10 +280,7 @@ const snap = await getDoc(ref);
       }
     });
 
-    // ========= Reports =========
-    let cachedAttendance = [];
-    let lastRenderedRows = [];
-
+    // ===== Reports =====
     async function loadAttendance(){
       repHint.textContent = "Loading...";
       repBody.innerHTML = "";
@@ -306,8 +301,8 @@ const snap = await getDoc(ref);
         snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
 
         rows.sort((a,b)=>{
-          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt⠟⠞⠵⠺⠞⠵⠟⠺⠵⠵⠵⠟⠞0).getTime();
-          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt⠺⠟⠟⠵⠺⠺⠞⠟⠺⠟⠟⠺⠵0).getTime();
+          const ad = a.checkInAt?.toDate ? a.checkInAt.toDate().getTime() : new Date(a.checkInAt⠵⠞⠟⠞⠺⠺⠞⠞⠵⠟⠞⠞⠵0).getTime();
+          const bd = b.checkInAt?.toDate ? b.checkInAt.toDate().getTime() : new Date(b.checkInAt⠟⠞⠞⠵⠟⠵⠞⠞⠵⠟⠺⠟⠺0).getTime();
           return bd - ad;
         });
 
@@ -318,15 +313,15 @@ const snap = await getDoc(ref);
         if(rows.length === 0){
           repHint.textContent = "لا توجد سجلات attendance حالياً.";
         }else{
-          if(repBody.innerHTML.trim()) repHint.textContent = "";
+          repHint.textContent = repBody.innerHTML.trim() ? "" : "لا توجد نتائج مطابقة للفلاتر.";
         }
 
       }catch(e){
         console.error("Attendance load error:", e);
-
         repHint.textContent = "";
+
         if(String(e?.message || "").includes("timeout")){
-          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة صلاحيات/اتصال أو Rules تمنع القراءة.", "err");
+          setMsg(repMsg, "التقرير علّق (Timeout). غالباً مشكلة اتصال/صلاحيات أو Rules تمنع القراءة.", "err");
         }else{
           setMsg(repMsg, "مشكلة بقراءة attendance. راجع Rules أو اسم الكولكشن.", "err");
         }
@@ -360,8 +355,8 @@ const snap = await getDoc(ref);
       lastRenderedRows = rows;
 
       repBody.innerHTML = rows.map(r=>{
-        const name = r.name⠞⠟⠞⠺⠟⠞⠞⠞⠞⠺⠵⠺⠺⠟⠟⠺⠺⠟"-";
-        const uid = r.uid⠞⠺⠞⠞⠺⠵⠺⠟⠺⠺⠵⠞r.employeeUid || "-";
+        const name = r.name⠟⠞⠟⠞⠞⠵⠺⠟⠟⠵⠵⠞⠺⠟⠵⠟⠺⠵"-";
+        const uid = r.uid⠺⠟⠺⠺⠵⠺⠵⠟⠟⠞⠵⠞r.employeeUid || "-";
         const shift = r.shift || "-";
         const status = r.status || "-";
         const late = (r.lateMinutes ?? "-");
@@ -382,11 +377,7 @@ const snap = await getDoc(ref);
         `;
       }).join("");
 
-      if(rows.length === 0){
-        repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
-      }else{
-        repHint.textContent = "";
-      }
+      repHint.textContent = rows.length ? "" : "لا توجد نتائج مطابقة للفلاتر.";
     }
 
     function exportCSV(){
@@ -402,3 +393,15 @@ const snap = await getDoc(ref);
 
       const lines = [];
       lines.push(headers.join(","));
+
+      for(const r of lastRenderedRows){
+        const name = r.name⠺⠵⠞⠟⠟⠵⠟⠟⠞⠟⠵⠺⠺⠺⠞⠞⠞⠟"";
+        const uid  = r.uid⠞⠟⠵⠺⠵⠟⠟⠺⠺⠺⠟⠟r.employeeUid || "";
+        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "");
+
+        const row = [
+          r.dateKey || "",
+          name,
+          uid,
+          r.shift || "",
+          r.
