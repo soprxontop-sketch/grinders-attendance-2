@@ -17,6 +17,251 @@
   </header>
 
   <div class="wrap">
+    > Coding:
+<script type="module">
+  // ✅ Reports module (ADD-ONLY) — does NOT modify your existing admin logic
+  import { requireRole } from "./js/auth-guard.js";
+  import { db, collection, getDocs, query, where, orderBy } from "./js/firebase.js";
+
+  const ATT_COLLECTION = "attendance"; // إذا اسمها عندك غيره فقط غيّر هذا السطر
+
+  const repFrom = document.getElementById("repFrom");
+  const repTo = document.getElementById("repTo");
+  const repLoadBtn = document.getElementById("repLoadBtn");
+  const repCsvSummaryBtn = document.getElementById("repCsvSummaryBtn");
+  const repCsvDetailsBtn = document.getElementById("repCsvDetailsBtn");
+  const repMsg = document.getElementById("repMsg");
+  const repTbody = document.getElementById("repTbody");
+
+  function setMsg(text, kind){
+    repMsg.textContent = text || "";
+    repMsg.className = "msg" + (kind ? (" " + kind) : "");
+  }
+
+  function toISODate(d){
+    const pad = (n)=> String(n).padStart(2,"0");
+    return ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())};
+  }
+
+  // Default: current month
+  (function initDates(){
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    repFrom.value = toISODate(from);
+    repTo.value = toISODate(to);
+  })();
+
+  function downloadCSV(filename, rows){
+    const esc = (v)=>{
+      const s = (v ?? "").toString();
+      if (/[",\n]/.test(s)) return "${s.replace(/"/g,'""')}";
+      return s;
+    };
+    const csv = rows.map(r => r.map(esc).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseDateInput(val){
+    if(!val) return null;
+    const d = new Date(val + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function minutesBetween(a, b){
+    if(!a || !b) return 0;
+    return Math.round((b - a) / 60000);
+  }
+
+  function fmtTime(ts){
+    if(!ts) return "-";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString("ar-IQ");
+  }
+
+  function fmtDate(ts){
+    if(!ts) return "-";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString("ar-IQ");
+  }
+
+  function pick(obj, keys){
+    for(const k of keys){
+      if(obj && obj[k] != null) return obj[k];
+    }
+    return null;
+  }
+
+  // We support multiple possible field names to avoid breaking your current schema
+  function normalizeDoc(docu){
+    const data = docu.data ? docu.data() : docu;
+    const uid = pick(data, ["uid","userId","employeeUid"]) || docu.id;
+    const name = pick(data, ["name","employeeName","userName"]) || "-";
+    const email = pick(data, ["email","userEmail"]) || "-";
+
+    const checkInAt = pick(data, ["checkInAt","checkIn","inAt","timeIn"]);
+    const checkOutAt = pick(data, ["checkOutAt","checkOut","outAt","timeOut"]);
+    const status = pick(data, ["status","state"]) || (checkOutAt ? "checked_out" : (checkInAt ? "checked_in" : "-"));
+
+    return { uid, name, email, checkInAt, checkOutAt, status, raw: data };
+  }
+
+  async function fetchAttendance(fromDate, toDate){
+    // Ensure admin
+    await requireRole("admin");
+
+    // inclusive range
+    const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0,0,0);
+    const to = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23,59,59);
+
+    // Try to query by checkInAt if it exists
+    // If your docs use different field, still will show "no data" and we tell you what to change.
+    const colRef = collection(db, ATT_COLLECTION);
+
+    let qy;
+    try{
+      qy = query(
+        colRef,
+        where("checkInAt", ">=", from),
+        where("checkInAt", "<=", to),
+        orderBy("checkInAt", "desc")
+      );
+    }catch(e){
+      // If query/orderBy not available or index missing, fallback to get all and filter client-side
+      qy = colRef;
+
+> Coding:
+}
+
+    const snap = await getDocs(qy);
+    const rows = [];
+    snap.forEach(d => rows.push({ id: d.id, ...normalizeDoc(d) }));
+
+    // If fallback got all docs, filter by date here
+    const filtered = rows.filter(r=>{
+      const ci = r.checkInAt?.toDate ? r.checkInAt.toDate() : (r.checkInAt ? new Date(r.checkInAt) : null);
+      if(!ci) return false;
+      return ci >= from && ci <= to;
+    });
+
+    // Sort newest first
+    filtered.sort((a,b)=>{
+      const ad = a.checkInAt?.toDate ? a.checkInAt.toDate() : new Date(a.checkInAt);
+      const bd = b.checkInAt?.toDate ? b.checkInAt.toDate() : new Date(b.checkInAt);
+      return bd - ad;
+    });
+
+    return filtered;
+  }
+
+  function renderTable(items){
+    repTbody.innerHTML = "";
+    if(!items.length){
+      repTbody.innerHTML = <tr><td colspan="7" class="muted">لا يوجد بيانات ضمن الفترة المختارة.</td></tr>;
+      return;
+    }
+
+    repTbody.innerHTML = items.map(it=>{
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
+      const co = it.checkOutAt?.toDate ? it.checkOutAt.toDate() : (it.checkOutAt ? new Date(it.checkOutAt) : null);
+      const mins = minutesBetween(ci, co);
+
+      return `
+        <tr>
+          <td>${escapeHtml(it.name)}</td>
+          <td style="font-family:monospace">${escapeHtml(it.uid)}</td>
+          <td>${escapeHtml(fmtDate(it.checkInAt))}</td>
+          <td>${escapeHtml(fmtTime(it.checkInAt))}</td>
+          <td>${escapeHtml(fmtTime(it.checkOutAt))}</td>
+          <td>${mins ? mins : "-"}</td>
+          <td>${escapeHtml(it.status)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+
+  function buildSummary(items){
+    // Summary per employee per day: total minutes + sessions count
+    const map = new Map(); // key: uid|date
+    for(const it of items){
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
+      const co = it.checkOutAt?.toDate ? it.checkOutAt.toDate() : (it.checkOutAt ? new Date(it.checkOutAt) : null);
+      if(!ci) continue;
+
+      const dayKey = ci.toISOString().slice(0,10);
+      const key = ${it.uid}|${dayKey};
+      const mins = minutesBetween(ci, co);
+
+      const cur = map.get(key) || { uid: it.uid, name: it.name, day: dayKey, sessions: 0, minutes: 0 };
+      cur.sessions += 1;
+      cur.minutes += mins;
+      map.set(key, cur);
+    }
+
+    const rows = Array.from(map.values());
+    rows.sort((a,b)=> (a.day === b.day ? a.name.localeCompare(b.name) : a.day.localeCompare(b.day)));
+    return rows;
+  }
+
+  async function runLoad(){
+    setMsg("Loading…", "");
+    repLoadBtn.disabled = true;
+
+    const fromD = parseDateInput(repFrom.value);
+    const toD = parseDateInput(repTo.value);
+    if(!fromD || !toD){
+      setMsg("اختر تاريخ بداية ونهاية.", "err");
+      repLoadBtn.disabled = false;
+      return;
+    }
+
+    try{
+      const items = await fetchAttendance(fromD, toD);
+      renderTable(items);
+
+      if(items.length === 0){
+        setMsg("ماكو بيانات ضمن الفترة. إذا متأكد عندك بيانات: تأكد اسم collection = attendance واسم الحقل checkInAt.", "err");
+      }else{
+        setMsg(`تم تحميل ${items.length} سجل ✅`, "ok");
+      }
+
+      // Store for CSV buttons
+      window.__REP_ITEMS__ = items;
+    }catch(e){
+      console.error(e);
+      setMsg("فشل تحميل التقرير. ممكن تحتاج Index في Firestore أو اسم الحقول مختلف.", "err");
+    }finally{
+      repLoadBtn.disabled = false;
+    }
+  }
+
+  repLoadBtn.addEventListener("click", runLoad);
+
+  repCsvDetailsBtn.addEventListener("click", ()=>{
+    const items = window.__REP_ITEMS__ || [];
+    if(!items.length){
+      setMsg("حمّل التقرير أولاً ثم صدّر CSV.", "err");
+      return;
+    }
+    const rows = [
+      ["uid","name","date","checkIn","checkOut","minutes","status","email"]
+    ];
+
+    for(const it of items){
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.
+
     <div class="card">
       <h2>إضافة/تحديث موظف (يدوي)</h2>
       <div class="muted">مهم: UID لازم يكون من Firebase Auth (Users)</div>
@@ -180,6 +425,251 @@ console.error(e);
 
     await loadUsers();
   </script>
+  > Coding:
+<script type="module">
+  // ✅ Reports module (ADD-ONLY) — does NOT modify your existing admin logic
+  import { requireRole } from "./js/auth-guard.js";
+  import { db, collection, getDocs, query, where, orderBy } from "./js/firebase.js";
+
+  const ATT_COLLECTION = "attendance"; // إذا اسمها عندك غيره فقط غيّر هذا السطر
+
+  const repFrom = document.getElementById("repFrom");
+  const repTo = document.getElementById("repTo");
+  const repLoadBtn = document.getElementById("repLoadBtn");
+  const repCsvSummaryBtn = document.getElementById("repCsvSummaryBtn");
+  const repCsvDetailsBtn = document.getElementById("repCsvDetailsBtn");
+  const repMsg = document.getElementById("repMsg");
+  const repTbody = document.getElementById("repTbody");
+
+  function setMsg(text, kind){
+    repMsg.textContent = text || "";
+    repMsg.className = "msg" + (kind ? (" " + kind) : "");
+  }
+
+  function toISODate(d){
+    const pad = (n)=> String(n).padStart(2,"0");
+    return ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())};
+  }
+
+  // Default: current month
+  (function initDates(){
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    repFrom.value = toISODate(from);
+    repTo.value = toISODate(to);
+  })();
+
+  function downloadCSV(filename, rows){
+    const esc = (v)=>{
+      const s = (v ?? "").toString();
+      if (/[",\n]/.test(s)) return "${s.replace(/"/g,'""')}";
+      return s;
+    };
+    const csv = rows.map(r => r.map(esc).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseDateInput(val){
+    if(!val) return null;
+    const d = new Date(val + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function minutesBetween(a, b){
+    if(!a || !b) return 0;
+    return Math.round((b - a) / 60000);
+  }
+
+  function fmtTime(ts){
+    if(!ts) return "-";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString("ar-IQ");
+  }
+
+  function fmtDate(ts){
+    if(!ts) return "-";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString("ar-IQ");
+  }
+
+  function pick(obj, keys){
+    for(const k of keys){
+      if(obj && obj[k] != null) return obj[k];
+    }
+    return null;
+  }
+
+  // We support multiple possible field names to avoid breaking your current schema
+  function normalizeDoc(docu){
+    const data = docu.data ? docu.data() : docu;
+    const uid = pick(data, ["uid","userId","employeeUid"]) || docu.id;
+    const name = pick(data, ["name","employeeName","userName"]) || "-";
+    const email = pick(data, ["email","userEmail"]) || "-";
+
+    const checkInAt = pick(data, ["checkInAt","checkIn","inAt","timeIn"]);
+    const checkOutAt = pick(data, ["checkOutAt","checkOut","outAt","timeOut"]);
+    const status = pick(data, ["status","state"]) || (checkOutAt ? "checked_out" : (checkInAt ? "checked_in" : "-"));
+
+    return { uid, name, email, checkInAt, checkOutAt, status, raw: data };
+  }
+
+  async function fetchAttendance(fromDate, toDate){
+    // Ensure admin
+    await requireRole("admin");
+
+    // inclusive range
+    const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0,0,0);
+    const to = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23,59,59);
+
+    // Try to query by checkInAt if it exists
+    // If your docs use different field, still will show "no data" and we tell you what to change.
+    const colRef = collection(db, ATT_COLLECTION);
+
+    let qy;
+    try{
+      qy = query(
+        colRef,
+        where("checkInAt", ">=", from),
+        where("checkInAt", "<=", to),
+        orderBy("checkInAt", "desc")
+      );
+    }catch(e){
+      // If query/orderBy not available or index missing, fallback to get all and filter client-side
+      qy = colRef;
+
+> Coding:
+}
+
+    const snap = await getDocs(qy);
+    const rows = [];
+    snap.forEach(d => rows.push({ id: d.id, ...normalizeDoc(d) }));
+
+    // If fallback got all docs, filter by date here
+    const filtered = rows.filter(r=>{
+      const ci = r.checkInAt?.toDate ? r.checkInAt.toDate() : (r.checkInAt ? new Date(r.checkInAt) : null);
+      if(!ci) return false;
+      return ci >= from && ci <= to;
+    });
+
+    // Sort newest first
+    filtered.sort((a,b)=>{
+      const ad = a.checkInAt?.toDate ? a.checkInAt.toDate() : new Date(a.checkInAt);
+      const bd = b.checkInAt?.toDate ? b.checkInAt.toDate() : new Date(b.checkInAt);
+      return bd - ad;
+    });
+
+    return filtered;
+  }
+
+  function renderTable(items){
+    repTbody.innerHTML = "";
+    if(!items.length){
+      repTbody.innerHTML = <tr><td colspan="7" class="muted">لا يوجد بيانات ضمن الفترة المختارة.</td></tr>;
+      return;
+    }
+
+    repTbody.innerHTML = items.map(it=>{
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
+      const co = it.checkOutAt?.toDate ? it.checkOutAt.toDate() : (it.checkOutAt ? new Date(it.checkOutAt) : null);
+      const mins = minutesBetween(ci, co);
+
+      return `
+        <tr>
+          <td>${escapeHtml(it.name)}</td>
+          <td style="font-family:monospace">${escapeHtml(it.uid)}</td>
+          <td>${escapeHtml(fmtDate(it.checkInAt))}</td>
+          <td>${escapeHtml(fmtTime(it.checkInAt))}</td>
+          <td>${escapeHtml(fmtTime(it.checkOutAt))}</td>
+          <td>${mins ? mins : "-"}</td>
+          <td>${escapeHtml(it.status)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+
+  function buildSummary(items){
+    // Summary per employee per day: total minutes + sessions count
+    const map = new Map(); // key: uid|date
+    for(const it of items){
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.checkInAt) : null);
+      const co = it.checkOutAt?.toDate ? it.checkOutAt.toDate() : (it.checkOutAt ? new Date(it.checkOutAt) : null);
+      if(!ci) continue;
+
+      const dayKey = ci.toISOString().slice(0,10);
+      const key = ${it.uid}|${dayKey};
+      const mins = minutesBetween(ci, co);
+
+      const cur = map.get(key) || { uid: it.uid, name: it.name, day: dayKey, sessions: 0, minutes: 0 };
+      cur.sessions += 1;
+      cur.minutes += mins;
+      map.set(key, cur);
+    }
+
+    const rows = Array.from(map.values());
+    rows.sort((a,b)=> (a.day === b.day ? a.name.localeCompare(b.name) : a.day.localeCompare(b.day)));
+    return rows;
+  }
+
+  async function runLoad(){
+    setMsg("Loading…", "");
+    repLoadBtn.disabled = true;
+
+    const fromD = parseDateInput(repFrom.value);
+    const toD = parseDateInput(repTo.value);
+    if(!fromD || !toD){
+      setMsg("اختر تاريخ بداية ونهاية.", "err");
+      repLoadBtn.disabled = false;
+      return;
+    }
+
+    try{
+      const items = await fetchAttendance(fromD, toD);
+      renderTable(items);
+
+      if(items.length === 0){
+        setMsg("ماكو بيانات ضمن الفترة. إذا متأكد عندك بيانات: تأكد اسم collection = attendance واسم الحقل checkInAt.", "err");
+      }else{
+        setMsg(`تم تحميل ${items.length} سجل ✅`, "ok");
+      }
+
+      // Store for CSV buttons
+      window.__REP_ITEMS__ = items;
+    }catch(e){
+      console.error(e);
+      setMsg("فشل تحميل التقرير. ممكن تحتاج Index في Firestore أو اسم الحقول مختلف.", "err");
+    }finally{
+      repLoadBtn.disabled = false;
+    }
+  }
+
+  repLoadBtn.addEventListener("click", runLoad);
+
+  repCsvDetailsBtn.addEventListener("click", ()=>{
+    const items = window.__REP_ITEMS__ || [];
+    if(!items.length){
+      setMsg("حمّل التقرير أولاً ثم صدّر CSV.", "err");
+      return;
+    }
+    const rows = [
+      ["uid","name","date","checkIn","checkOut","minutes","status","email"]
+    ];
+
+    for(const it of items){
+      const ci = it.checkInAt?.toDate ? it.checkInAt.toDate() : (it.checkInAt ? new Date(it.
+
 </body>
 </html>
 
