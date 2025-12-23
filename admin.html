@@ -309,28 +309,29 @@ const ref = doc(db, "users", uid);
 
       lastRenderedRows = rows;
 
-      repBody.innerHTML = rows.map(r=>{
-        const name = r.name"-";
-        const uid = r.uidr.employeeUid || "-";
-        const shift = r.shift || "-";
-        const status = r.status || "-";
-        const late = (r.lateMinutes ?? "-");
-        const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
+      repBody.innerHTML = rows.map(r => {
+  const name = r.name || r.employeeName || "-";
+  const uid  = r.uid || r.employeeUid || r.userId || "-";
+  const shift = r.shift || "-";
+  const status = r.status || "-";
+  const late = (r.lateMinutes ?? "-");
+  const dist = (r.distanceM ?? r.checkOutDistanceM ?? "-");
 
-        return `
-          <tr>
-            <td>${escapeHtml(r.dateKey || "-")}</td>
-            <td>${escapeHtml(name)}</td>
-            <td style="font-family:monospace">${escapeHtml(uid)}</td>
-            <td>${escapeHtml(shift)}</td>
-            <td>${escapeHtml(status)}</td>
-            <td>${escapeHtml(tsToText(r.checkInAt))}</td>
-            <td>${escapeHtml(tsToText(r.checkOutAt))}</td>
-            <td>${escapeHtml(late)}</td>
-            <td>${escapeHtml(dist)}</td>
-          </tr>
-        `;
-      }).join("");
+  return `
+    <tr>
+      <td>${escapeHtml(r.dateKey || "-")}</td>
+      <td>${escapeHtml(name)}</td>
+      <td style="font-family:monospace">${escapeHtml(uid)}</td>
+      <td>${escapeHtml(shift)}</td>
+      <td>${escapeHtml(status)}</td>
+      <td>${escapeHtml(tsToText(r.checkInAt))}</td>
+      <td>${escapeHtml(tsToText(r.checkOutAt))}</td>
+      <td>${escapeHtml(late)}</td>
+      <td>${escapeHtml(dist)}</td>
+    </tr>
+  `;
+}).join("");
+
 
       if(rows.length === 0){
         repHint.textContent = "لا توجد نتائج مطابقة للفلاتر.";
