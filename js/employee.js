@@ -248,3 +248,4 @@ onAuthStateChanged(auth, async (user) => {
   setInterval(refreshGPS, 20000);
 });
 
+
