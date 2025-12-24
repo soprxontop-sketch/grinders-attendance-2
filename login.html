@@ -57,9 +57,17 @@
       btn.disabled = true;
       btn.textContent = "جاري الدخول...";
       try{
-        const { profile } = await login(email, password);
-        setMsg("تم تسجيل الدخول ✅", "ok");
-        redirectByRole(profile);
+        const cred = await login(email, password);
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+
+  const { profile } = cred;
+
+  setMsg("تم تسجيل الدخول ✅", "ok");
+  redirectByRole(profile);
+});
+
       }catch(err){
         console.error(err);
         setMsg(friendlyAuthError(err), "err");
