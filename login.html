@@ -55,26 +55,27 @@
       }
 
       btn.disabled = true;
-      btn.textContent = "جاري الدخول...";
-      try{
-        const cred = await login(email, password);
+btn.textContent = "جاري الدخول...";
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) return;
+try {
+  const cred = await login(email, password);
 
-  const { profile } = cred;
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return;
 
-  setMsg("تم تسجيل الدخول ✅", "ok");
-  redirectByRole(profile);
-});
+    const { profile } = cred;
 
-      }catch(err){
-        console.error(err);
-        setMsg(friendlyAuthError(err), "err");
-      }finally{
-        btn.disabled = false;
-        btn.textContent = "تسجيل الدخول";
-      }
+    setMsg("تم تسجيل الدخول ✅", "ok");
+    redirectByRole(profile);
+  });
+
+} catch (err) {
+  console.error(err);
+  setMsg(friendlyAuthError(err), "err");
+} finally {
+  btn.disabled = false;
+  btn.textContent = "تسجيل الدخول";
+}
     }
 
     btn.addEventListener("click", doLogin);
